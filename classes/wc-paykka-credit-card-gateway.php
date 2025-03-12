@@ -1,7 +1,6 @@
 <?php
-
 /**
- * WC_Gateway_PayPal_Credit_Card_Rest_AngellEYE class.
+ * Paykka_Credit_Card_Gateway class.
  *
  * @extends WC_Payment_Gateway
  */
@@ -14,7 +13,7 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
         $this->id = 'paykka';
         $this->has_fields = false;
         $this->version = '8.2.0';
-        $this->icon = apply_filters('woocommerce_paykka_icon', plugin_dir_url(__FILE__) . 'assets/images/payway.png');
+        $this->icon = apply_filters('woocommerce_paykka_icon', plugin_dir_url(__FILE__) . '/assets/images/payway.png');
         $this->method_description = __('Secure credit card payments via PayKKa.', 'paykka-for-woocommerce');
         $this->method_title = __('PayKKa Credit Card', 'paykka-for-woocommerce');
 
@@ -52,136 +51,80 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
 
         $this->form_fields = array(
             'enabled' => array(
-                'title' => __('Enable/Disable', 'paypal-for-woocommerce'),
-                'label' => __('Enable Braintree Payment Gateway', 'paypal-for-woocommerce'),
+                'title' => __('Enable/Disable', 'paykka-for-woocommerce'),
+                'label' => __('Enable PayKKa Payment Gateway', 'paykka-for-woocommerce'),
                 'type' => 'checkbox',
                 'description' => '',
                 'default' => 'no'
             ),
             'title' => array(
-                'title' => __('Title', 'paypal-for-woocommerce'),
+                'title' => __('Title', 'paykka-for-woocommerce'),
                 'type' => 'text',
-                'description' => __('This controls the title which the user sees during checkout.', 'paypal-for-woocommerce'),
-                'default' => __('Credit Card', 'paypal-for-woocommerce'),
+                'description' => __('This controls the title which the user sees during checkout.', 'paykka-for-woocommerce'),
+                'default' => __('Credit Card', 'paykka-for-woocommerce'),
                 'desc_tip' => true
             ),
             'description' => array(
-                'title' => __('Description', 'paypal-for-woocommerce'),
+                'title' => __('Description', 'paykka-for-woocommerce'),
                 'type' => 'textarea',
-                'description' => __('This controls the description which the user sees during checkout.', 'paypal-for-woocommerce'),
-                'default' => __('Pay securely with your credit card.', 'paypal-for-woocommerce'),
+                'description' => __('This controls the description which the user sees during checkout.', 'paykka-for-woocommerce'),
+                'default' => __('Pay securely with your credit card.', 'paykka-for-woocommerce'),
                 'desc_tip' => true
             ),
-            'enable_braintree_drop_in' => array(
-                'title' => __('Enable Drop-in Payment UI', 'paypal-for-woocommerce'),
-                'label' => __('Enable Drop-in Payment UI', 'paypal-for-woocommerce'),
-                'type' => 'checkbox',
-                'description' => __('Rather than showing a credit card form on your checkout, this shows the form on it\'s own page, thus making the process more secure and more PCI friendly.', 'paypal-for-woocommerce'),
-                'default' => 'yes'
-            ),
             'sandbox' => array(
-                'title' => __('Sandbox', 'paypal-for-woocommerce'),
-                'label' => __('Enable Sandbox Mode', 'paypal-for-woocommerce'),
+                'title' => __('Sandbox', 'paykka-for-woocommerce'),
+                'label' => __('Enable Sandbox Mode', 'paykka-for-woocommerce'),
                 'type' => 'checkbox',
-                'description' => __('Place the payment gateway in sandbox mode using sandbox API keys (real payments will not be taken).', 'paypal-for-woocommerce'),
+                'description' => __('Place the payment gateway in sandbox mode using sandbox API keys (real payments will not be taken).', 'paykka-for-woocommerce'),
                 'default' => 'yes'
             ),
             'sandbox_public_key' => array(
-                'title' => __('Sandbox Public Key', 'paypal-for-woocommerce'),
+                'title' => __('Sandbox Public Key', 'paykka-for-woocommerce'),
                 'type' => 'password',
-                'description' => __('Get your API keys from your Braintree account.', 'paypal-for-woocommerce'),
+                'description' => __('Get your API keys from your PayKKa account.', 'paykka-for-woocommerce'),
                 'default' => '',
                 'desc_tip' => true,
                 'custom_attributes' => array('autocomplete' => 'new-password'),
             ),
             'sandbox_private_key' => array(
-                'title' => __('Sandbox Private Key', 'paypal-for-woocommerce'),
+                'title' => __('Sandbox Private Key', 'paykka-for-woocommerce'),
                 'type' => 'password',
-                'description' => __('Get your API keys from your Braintree account.', 'paypal-for-woocommerce'),
+                'description' => __('Get your API keys from your PayKKa account.', 'paykka-for-woocommerce'),
                 'default' => '',
                 'desc_tip' => true,
                 'custom_attributes' => array('autocomplete' => 'new-password'),
             ),
             'sandbox_merchant_id' => array(
-                'title' => __('Sandbox Merchant ID', 'paypal-for-woocommerce'),
+                'title' => __('Sandbox Merchant ID', 'paykka-for-woocommerce'),
                 'type' => 'password',
-                'description' => __('Get your API keys from your Braintree account.', 'paypal-for-woocommerce'),
+                'description' => __('Get your API keys from your PayKKa account.', 'paykka-for-woocommerce'),
                 'default' => '',
                 'desc_tip' => true,
                 'custom_attributes' => array('autocomplete' => 'new-password'),
             ),
             'public_key' => array(
-                'title' => __('Live Public Key', 'paypal-for-woocommerce'),
+                'title' => __('Live Public Key', 'paykka-for-woocommerce'),
                 'type' => 'password',
-                'description' => __('Get your API keys from your Braintree account.', 'paypal-for-woocommerce'),
+                'description' => __('Get your API keys from your PayKKa account.', 'paykka-for-woocommerce'),
                 'default' => '',
                 'desc_tip' => true,
                 'custom_attributes' => array('autocomplete' => 'new-password'),
             ),
             'private_key' => array(
-                'title' => __('Live Private Key', 'paypal-for-woocommerce'),
+                'title' => __('Live Private Key', 'paykka-for-woocommerce'),
                 'type' => 'password',
-                'description' => __('Get your API keys from your Braintree account.', 'paypal-for-woocommerce'),
+                'description' => __('Get your API keys from your PayKKa account.', 'paykka-for-woocommerce'),
                 'default' => '',
                 'desc_tip' => true,
                 'custom_attributes' => array('autocomplete' => 'new-password'),
             ),
             'merchant_id' => array(
-                'title' => __('Live Merchant ID', 'paypal-for-woocommerce'),
+                'title' => __('Live Merchant ID', 'paykka-for-woocommerce'),
                 'type' => 'password',
-                'description' => __('Get your API keys from your Braintree account.', 'paypal-for-woocommerce'),
+                'description' => __('Get your API keys from your PayKKa account.', 'paykka-for-woocommerce'),
                 'default' => '',
                 'desc_tip' => true
             ),
-            'payment_action' => array(
-                'title' => __('Payment Action', 'paypal-for-woocommerce'),
-                'label' => __('Whether to process as a Sale or Authorization.', 'paypal-for-woocommerce'),
-                'description' => __('Sale will capture the funds immediately when the order is placed.  Authorization will verify and store payment details.'),
-                'type' => 'select',
-                'css' => 'max-width:150px;',
-                'class' => 'wc-enhanced-select',
-                'options' => array(
-                    'Sale' => 'Sale',
-                    'Authorization' => 'Authorization',
-                ),
-                'default' => 'Sale'
-            ),
-            'enable_tokenized_payments' => array(
-                'title' => __('Enable Tokenized Payments', 'paypal-for-woocommerce'),
-                'label' => __('Enable Tokenized Payments', 'paypal-for-woocommerce'),
-                'type' => 'checkbox',
-                'description' => __('Allow buyers to securely save payment details to their account for quick checkout / auto-ship orders in the future.', 'paypal-for-woocommerce'),
-                'default' => 'no',
-                'class' => 'enable_tokenized_payments'
-            ),
-            'softdescriptor' => array(
-                'title' => __('Credit Card Statement Name', 'paypal-for-woocommerce'),
-                'type' => 'text',
-                'description' => __('The value entered here will be displayed on the buyer\'s credit card statement. Company name/DBA section must be either 3, 7 or 12 characters and the product descriptor can be up to 18, 14, or 9 characters respectively (with an * in between for a total descriptor name of 22 characters).', 'paypal-for-woocommerce'),
-                'default' => '',
-                'desc_tip' => true,
-            ),
-            'enable_apple_pay' => array(
-                'title' => __('Enable Apple Pay', 'paypal-for-woocommerce'),
-                'type' => 'checkbox',
-                'label' => __('Enable Apple Pay', 'paypal-for-woocommerce'),
-                'default' => 'no',
-                'description' => ''
-            ),
-            'enable_google_pay' => array(
-                'title' => __('Enable Google Pay', 'paypal-for-woocommerce'),
-                'type' => 'checkbox',
-                'label' => __('Enable Google Pay', 'paypal-for-woocommerce'),
-                'default' => 'no',
-                'description' => ''
-            ),
-            'merchant_id_google_pay' => array(
-                'title' => __('Google Pay Merchant ID', 'paypal-for-woocommerce'),
-                'type' => 'text',
-                'description' => __('Enter your Google Pay Merchant ID provided by Google.( optional for sandbox mode )', 'paypal-for-woocommerce'),
-                'default' => '',
-                'desc_tip' => true
-            )
         );
     }
 
@@ -192,10 +135,10 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
 
     public function payment_fields()
     {
-        echo '<div id="custom-payment-fields">
-            <label>Custom Field <span class="required">*</span></label>
-            <input type="text" name="custom_field" autocomplete="off">
-        </div>';
+        // echo '<div id="custom-payment-fields">
+        //     <label>Custom Field <span class="required">*</span></label>
+        //     <input type="text" name="custom_field" autocomplete="off">
+        // </div>';
     }
 
     public function payment_scripts()
@@ -212,18 +155,18 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
     {
 
         if ($this->enabled !== 'yes') {
-            error_log('PayKKa Gateway is NOT available: Disabled in settings.');
+            // error_log('PayKKa Gateway is NOT available: Disabled in settings.');
             return true;
         }
 
         // 额外调试
         if (!is_checkout()) {
-            error_log('PayKKa Gateway is NOT available: Not on checkout page.');
+            // error_log('PayKKa Gateway is NOT available: Not on checkout page.');
             return true;
         }
 
         $test = $this->enabled === 'yes';
-        error_log('Payment gateway is available: ' . $this->enabled . ' :bool: ' . $test);
+        // error_log('Payment gateway is available: ' . $this->enabled . ' :bool: ' . $test);
         return true;
     }
 
@@ -235,6 +178,7 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
 
     public function process_payment($order_id)
     {
+        ob_start();
         // 真实代码
         $order = wc_get_order($order_id);
 
@@ -250,10 +194,12 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
         // WC()->cart->empty_cart();
 
         // 返回成功和重定向链接
+        
         $url_code = $this->do_paykka_payment($order);
+        ob_end_clean();
         // print "请求url" . $url_code . "";
 
-        error_log("session url " . $url_code);
+        // error_log("session url " . $url_code);
 
         return array(
             'result' => 'success',
@@ -263,36 +209,27 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
 
     public function handle_payment_callback()
     {
-        // echo '<script>console.log("回调准备' . $_REQUEST['order_id'] . '")</script>';
-        // 获取收银台返回的支付结果参数
-        // $payment_result = $_GET; // 假设使用 GET 请求，实际根据情况调整
+        ob_start(); // 开启输出缓冲区
 
         $order_id = $_REQUEST['order_id'];
         $order = wc_get_order($order_id);
 
         $order->payment_complete();
+        WC()->cart->empty_cart();
         wc_reduce_stock_levels($order_id);
-        $order->add_order_note(__('Payment completed via custom payment gateway.', 'woocommerce'));
-        // 跳转到订单完成页面
-        // echo '<script>console.log("回调准备' . $this->get_return_url($order) . '")</script>';
 
         $return_url = $this->get_return_url($order);
-        if (headers_sent()) {
-            // 如果有提前输出则使用window跳转
-            echo '<script>window.location.href="' . esc_url($return_url) . '";</script>';
-            exit;
-        }else{
-            wp_redirect($return_url);
-            exit;
-        }
+
+        ob_end_clean();
+        wp_safe_redirect($return_url);
+        exit;
     }
 
 
     private function do_paykka_payment($order)
     {
-
         $timestamp = time();
-        $cart_total = $order ->get_total() * 100;
+        $cart_total = $order->get_total() * 100;
         // 待优化--TODO
         $now = new DateTime('now', new DateTimeZone('UTC'));
         // 转换为香港时间
@@ -300,7 +237,7 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
         // 使用 DateInterval 对象来添加 5 分钟
         $now->add(new DateInterval('PT5M'));
         $expire_time = $now->format('Y-m-d H:i:s');
-        $callback_url = add_query_arg('wc-api', 'WC_Gateway_Custom_Payment_callback', home_url('/')) . "&order_id=" . $order -> get_id();
+        $callback_url = add_query_arg('wc-api', 'WC_Gateway_Custom_Payment_callback', home_url('/')) . "&order_id=" . $order->get_id();
 
         $http_body = '{
             "version": "v1.0",
@@ -308,7 +245,7 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
             "payment_type": "PURCHASE",
             "trans_id": "m' . $timestamp . '",
             "timestamp": ' . $timestamp . ',
-            "currency": "'.$order->get_currency().'",
+            "currency": "' . $order->get_currency() . '",
             "amount": "' . $cart_total . '",
             "notify_url": "https://pub-dev.eu.paykka.com/prefix/callback?id=m11785643765251",
             "return_url": "' . $callback_url . '",

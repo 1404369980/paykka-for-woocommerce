@@ -1,20 +1,3 @@
-// import { registerPaymentMethod } from '@woocommerce/blocks-registry';
-// import { __ } from '@wordpress/i18n';
-
-// // 注册支付方法
-// registerPaymentMethod( {
-//     name: 'paykka', // 支付网关 ID
-//     label: __( 'PayKKa Gateway', 'woocommerce' ), // 支付方法标签
-//     content: <div>{ __( 'Pay via Custom Gateway', 'woocommerce' ) }</div>, // 支付方法内容
-//     edit: <div>{ __( 'Pay via Custom Gateway', 'woocommerce' ) }</div>, // 编辑模式下的内容
-//     canMakePayment: () => true, // 支付方法是否可用
-//     ariaLabel: __( 'PayKKa Gateway', 'woocommerce' ), // ARIA 标签
-//     supports: {
-//         features: [ 'products' ], // 支持的支付功能
-//     },
-// } );
-
-
 (()=>{
     "use strict";
     const e=window.wp.element,

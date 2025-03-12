@@ -119,30 +119,30 @@ add_action( 'woocommerce_blocks_loaded', 'paykka_gateway_block_support' );
 
 // new Init_Paykka_Gateway();
 
-add_action('wp_footer', function () {
-    $available_gateways = WC()->payment_gateways->get_available_payment_gateways();
-    foreach ($available_gateways as $gateway_id => $gateway) {
-        // 记录每个可用支付网关的 ID 和标题
-        error_log("支付网关 ID: $gateway_id, 标题: " . $gateway->title);
-    }
-});
+// add_action('wp_footer', function () {
+//     $available_gateways = WC()->payment_gateways->get_available_payment_gateways();
+//     foreach ($available_gateways as $gateway_id => $gateway) {
+//         // 记录每个可用支付网关的 ID 和标题
+//         error_log("支付网关 ID: $gateway_id, 标题: " . $gateway->title);
+//     }
+// });
 
 // add_filter('woocommerce_available_payment_gateways', function($gateways) {
 //     error_log('Available Payment Gateways: ' . print_r($gateways, true));
 //     return $gateways;
 // });
 
-add_action('wp_footer', function () {
-    if (is_checkout()) {
-        $gateways = WC()->payment_gateways->get_available_payment_gateways();
-        echo '<script>console.log("Available Payment Gateways: ", ' . json_encode(array_keys($gateways)) . ');</script>';
-    }
-});
+// add_action('wp_footer', function () {
+//     if (is_checkout()) {
+//         $gateways = WC()->payment_gateways->get_available_payment_gateways();
+//         echo '<script>console.log("Available Payment Gateways: ", ' . json_encode(array_keys($gateways)) . ');</script>';
+//     }
+// });
 
-add_action('wp_footer', function () {
-    if (is_checkout()) {
-        echo '<script>console.log("Cart Needs Payment? ", ' . (WC()->cart->needs_payment() ? 'true' : 'false') . ');</script>';
-    }
-});
+// add_action('wp_footer', function () {
+//     if (is_checkout()) {
+//         echo '<script>console.log("Cart Needs Payment? ", ' . (WC()->cart->needs_payment() ? 'true' : 'false') . ');</script>';
+//     }
+// });
 
 
