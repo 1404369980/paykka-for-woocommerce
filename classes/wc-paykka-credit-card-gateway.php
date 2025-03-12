@@ -263,7 +263,7 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
 
     public function handle_payment_callback()
     {
-        echo '<script>console.log("回调准备' . $_REQUEST['order_id'] . '")</script>';
+        // echo '<script>console.log("回调准备' . $_REQUEST['order_id'] . '")</script>';
         // 获取收银台返回的支付结果参数
         // $payment_result = $_GET; // 假设使用 GET 请求，实际根据情况调整
 
@@ -274,8 +274,17 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
         wc_reduce_stock_levels($order_id);
         $order->add_order_note(__('Payment completed via custom payment gateway.', 'woocommerce'));
         // 跳转到订单完成页面
-        wp_redirect($this->get_return_url($order));
-        exit;
+        // echo '<script>console.log("回调准备' . $this->get_return_url($order) . '")</script>';
+
+        $return_url = $this->get_return_url($order);
+        if (headers_sent()) {
+            // 如果有提前输出则使用window跳转
+            echo '<script>window.location.href="' . esc_url($return_url) . '";</script>';
+            exit;
+        }else{
+            wp_redirect($return_url);
+            exit;
+        }
     }
 
 
