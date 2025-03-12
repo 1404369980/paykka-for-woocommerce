@@ -250,7 +250,7 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
         // WC()->cart->empty_cart();
 
         // 返回成功和重定向链接
-        $url_code = $this->do_paykka_payment_2(100, $order_id);
+        $url_code = $this->do_paykka_payment($order);
         // print "请求url" . $url_code . "";
 
         error_log("session url " . $url_code);
@@ -278,11 +278,12 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
         exit;
     }
 
-    private function do_paykka_payment($cart_total, $order_id)
+
+    private function do_paykka_payment($order)
     {
 
         $timestamp = time();
-        $cart_total = $cart_total * 100;
+        $cart_total = $order ->get_total() * 100;
         // 待优化--TODO
         $now = new DateTime('now', new DateTimeZone('UTC'));
         // 转换为香港时间
@@ -290,7 +291,7 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
         // 使用 DateInterval 对象来添加 5 分钟
         $now->add(new DateInterval('PT5M'));
         $expire_time = $now->format('Y-m-d H:i:s');
-        $callback_url = add_query_arg('wc-api', 'WC_Gateway_Custom_Payment_callback', home_url('/')) . "&order_id=" . $order_id;
+        $callback_url = add_query_arg('wc-api', 'WC_Gateway_Custom_Payment_callback', home_url('/')) . "&order_id=" . $order -> get_id();
 
         $http_body = '{
             "version": "v1.0",
@@ -298,150 +299,7 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
             "payment_type": "PURCHASE",
             "trans_id": "m' . $timestamp . '",
             "timestamp": ' . $timestamp . ',
-            "currency": "EUR",
-            "amount": "' . $cart_total . '",
-            "notify_url": "https://pub-dev.eu.paykka.com/prefix/callback?id=m11785643765251",
-            "return_url": "' . $callback_url . '",
-            "expire_time": "' . $expire_time . '",
-            "session_mode": "HOST",
-            "display_merchant_name": "Paykka Test Merchant 38",
-            "display_locale": "es-ES",
-            "theme_id": "TQZ",
-            "goods": [
-                {
-                    "id": "6903743507161",
-                    "name": "Client poverty mountain porch correct sight interested western adapt almost",
-                    "description": "Hide criteria whole much soft chapter duty boot everybody regularly someone film officer gaze mount glove stage manner crisis promise edge commission entrance recovery widespread dead shrug hungry fourth base huge tendency drug history rare inside matter physical the heaven significance enable chief corporate settle station yes easily son absolute",
-                    "category": "KEEEOFLZLQ",
-                    "brand": "诺君安",
-                    "link": "http://vkcqntwhqyr4l.cc/6176333747692/UAgqdRtfWUxU5rm60vH7.shop",
-                    "price": 9068,
-                    "quantity": 9759,
-                    "delivery_date": "1989-01-28T01:55:04+08:00",
-                    "picture_url": "http://rl1vnqfy0ts8.org/3946280769095/XE91M0jYlt9Li3V7l7ISVLANAL.jpg"
-                },
-                {
-                    "id": "6903700259065",
-                    "name": "Teen peak swear buyer sight greatest arrangement cover off constant",
-                    "description": "New publicly tree future hotel addition even frame dangerous command reading eager chain chief assessment religious connection ultimate slice intention again present ceiling who vote west meanwhile area legal Bible buck egg environment wall educational emerge identity recognize increasingly time nature golden sugar resist confirm pie impression extend valley anniversary",
-                    "category": "ZAZRZI",
-                    "brand": "蓝贝股份",
-                    "link": "https://jfd0hcre.cn/7399179281482/Z9z5QfaM1zFlAxwYAaPMfyF9mwvi.shop",
-                    "price": 6667,
-                    "quantity": 4220,
-                    "delivery_date": "2020-07-13T23:20:06+08:00",
-                    "picture_url": "http://v1f.tv/5522950716815/H8Om1xdsUD8OwfIW8bxFwDoOKmu.jpg"
-                }
-            ],
-            "bill": {
-                "country": "US",
-                "email": "",
-                "state": "",
-                "city": "",
-                "address_line1": "",
-                "postal_code": "",
-                "first_name": "",
-                "last_name": "",
-                "area_code": "",
-                "phone_number": ""
-            },
-            "shipping": {
-                "first_name": "Kerrie",
-                "middle_name": "Donald",
-                "last_name": "Schranz",
-                "address_line1": "广西壮族自治区南宁市邕宁区联谷北路981号达富名都10栋4单元0503房",
-                "address_line2": "湖南省长沙市雨花区贤云中路999号达富御院10栋4单元0301房",
-                "country": "ML",
-                "state": "内蒙古自治区",
-                "city": "赤峰市",
-                "postal_code": "150404",
-                "email": "ruq3s6we@outlook.com",
-                "area_code": "0315",
-                "phone_number": "64663854"
-            },
-            "customer": {
-                "id": "NMQKZI",
-                "registration_time": "2084-02-23T12:10:43+08:00",
-                "past_transactions": 9747,
-                "area_code": "0391",
-                "phone_number": "88355298",
-                "date_of_birth": "PQLCVEYZEC",
-                "gender": "LFFWTZ",
-                "first_shopping_time": "2024-02-10T01:15:22+08:00",
-                "last_shopping_time": "1986-07-19T09:56:54+08:00",
-                "level": "VVVVVVVIP",
-                "email": "jl@zoho.com",
-                "pay_ip": "103.54.8.194",
-                "order_ip": "ae59:6016:988a:c23c:1ffc:38a4:aa92:73a0"
-            },
-            "payment": {
-                "store_payment_method": true,
-                "token_usage": "CARD_ON_FILE",
-                "shopper_reference": "f4911bc8b17106a08f2f7a89a9fc4d11",
-                "token": "",
-                "card_no": "4242424242424242"
-            },
-            "authentication": {
-                "challenge_indicator": "",
-                "authentication_only": false
-            }
-        }';
-
-        $curl = curl_init();
-
-        curl_setopt_array($curl, array(
-            CURLOPT_URL => 'https://pub-dev.eu.paykka.com/apis/session',
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_SSL_VERIFYPEER => false, // 禁用 SSL 证书验证
-            CURLOPT_SSL_VERIFYHOST => false, // 禁用主机名验证
-            CURLOPT_MAXREDIRS => 10,
-            CURLOPT_TIMEOUT => 30,
-            CURLOPT_FOLLOWLOCATION => true,
-            CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-            CURLOPT_CUSTOMREQUEST => 'POST',
-            CURLOPT_POSTFIELDS => $http_body,
-            CURLOPT_HTTPHEADER => array(
-                'signature: xxxx',
-                'type: RSA256',
-                'Content-Type: application/json'
-            ),
-        ));
-        $response = curl_exec($curl);
-        curl_close($curl);
-
-        if (curl_errno($curl)) {
-            echo 'Error:' . curl_error($curl);
-        } else {
-            print $response;
-        }
-        $data = json_decode($response, true);
-
-        // echo '<script>console.log("回调准备' . $data . '")</script>';
-        return $data['data']['session_url'];
-    }
-
-
-    private function do_paykka_payment_2($cart_total, $order_id)
-    {
-
-        $timestamp = time();
-        $cart_total = $cart_total * 100;
-        // 待优化--TODO
-        $now = new DateTime('now', new DateTimeZone('UTC'));
-        // 转换为香港时间
-        $now->setTimezone(new DateTimeZone('Asia/Hong_Kong'));
-        // 使用 DateInterval 对象来添加 5 分钟
-        $now->add(new DateInterval('PT5M'));
-        $expire_time = $now->format('Y-m-d H:i:s');
-        $callback_url = add_query_arg('wc-api', 'WC_Gateway_Custom_Payment_callback', home_url('/')) . "&order_id=" . $order_id;
-
-        $http_body = '{
-            "version": "v1.0",
-            "merchant_id": "18145872784048",
-            "payment_type": "PURCHASE",
-            "trans_id": "m' . $timestamp . '",
-            "timestamp": ' . $timestamp . ',
-            "currency": "EUR",
+            "currency": "'.$order->get_currency().'",
             "amount": "' . $cart_total . '",
             "notify_url": "https://pub-dev.eu.paykka.com/prefix/callback?id=m11785643765251",
             "return_url": "' . $callback_url . '",
