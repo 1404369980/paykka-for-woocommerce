@@ -8,6 +8,10 @@
 class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
 {
 
+
+    private $private_key;
+    private $merchant_id;
+
     public function __construct()
     {
         $this->id = 'paykka';
@@ -37,7 +41,7 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
         $this->testmode = 'yes' === $this->get_option('testmode');
         $this->private_key = $this->testmode ? $this->get_option('test_private_key') : $this->get_option('private_key');
         $this->publishable_key = $this->testmode ? $this->get_option('test_publishable_key') : $this->get_option('publishable_key');
-
+        $this->merchant_id = $this->testmode ? $this->get_option('merchant_id') : $this->get_option('sandbox_merchant_id');
         // 这个动作挂钩保存设置
         add_action('woocommerce_update_options_payment_gateways_' . $this->id, array($this, 'process_admin_options'));
         add_action('woocommerce_receipt_' . $this->id, array($this, 'receipt_page'));
@@ -80,7 +84,7 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
             ),
             'sandbox_public_key' => array(
                 'title' => __('Sandbox Public Key', 'paykka-for-woocommerce'),
-                'type' => 'password',
+                'type' => 'textarea',
                 'description' => __('Get your API keys from your PayKKa account.', 'paykka-for-woocommerce'),
                 'default' => '',
                 'desc_tip' => true,
@@ -96,7 +100,7 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
             ),
             'sandbox_merchant_id' => array(
                 'title' => __('Sandbox Merchant ID', 'paykka-for-woocommerce'),
-                'type' => 'password',
+                'type' => 'textarea',
                 'description' => __('Get your API keys from your PayKKa account.', 'paykka-for-woocommerce'),
                 'default' => '',
                 'desc_tip' => true,
@@ -104,7 +108,7 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
             ),
             'public_key' => array(
                 'title' => __('Live Public Key', 'paykka-for-woocommerce'),
-                'type' => 'password',
+                'type' => 'textarea',
                 'description' => __('Get your API keys from your PayKKa account.', 'paykka-for-woocommerce'),
                 'default' => '',
                 'desc_tip' => true,
@@ -120,7 +124,7 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
             ),
             'merchant_id' => array(
                 'title' => __('Live Merchant ID', 'paykka-for-woocommerce'),
-                'type' => 'password',
+                'type' => 'textarea',
                 'description' => __('Get your API keys from your PayKKa account.', 'paykka-for-woocommerce'),
                 'default' => '',
                 'desc_tip' => true
@@ -194,7 +198,7 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
         // WC()->cart->empty_cart();
 
         // 返回成功和重定向链接
-        
+
         $url_code = $this->do_paykka_payment($order);
         ob_end_clean();
         // print "请求url" . $url_code . "";
@@ -241,7 +245,7 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
 
         $http_body = '{
             "version": "v1.0",
-            "merchant_id": "18145872784048",
+            "merchant_id": "'.$this->merchant_id.'",
             "payment_type": "PURCHASE",
             "trans_id": "m' . $timestamp . '",
             "timestamp": ' . $timestamp . ',
@@ -252,7 +256,7 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
             "expire_time": "' . $expire_time . '",
             "session_mode": "HOST",
             "display_merchant_name": "Paykka Test Merchant 38",
-            "display_locale": "es-ES",
+            "display_locale": "zh-CN",
             "theme_id": "TQZ",
             "goods": [
                 {
