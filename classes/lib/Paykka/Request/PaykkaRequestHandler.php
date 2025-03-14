@@ -61,11 +61,12 @@ class PaykkaRequestHandler
         // 定义请求头
         $headers = array(
             'Content-Type' => 'application/json', // 设置内容类型为 JSON
-            'signature' => 'Bearer ' . $signStr . '',
+            'signature' => $signStr,
             'type' => 'RSA256' // 添加认证头
         );
 
         $response = wp_remote_post('https://pub-dev.eu.paykka.com/apis/session', array(
+        // $response = wp_remote_post('http://localhost:8080/apis/session', array(
             'headers' => $headers,
             'body' => $http_body,
         ));

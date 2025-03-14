@@ -214,7 +214,7 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
 
         $paykkaPaymentHelper = new PaykkaRequestHandler();
         error_log("PaykkaRequestHandler: \n");
-        $paykkaPaymentHelper->build($order, $this->merchant_id);
+        $url_code = $paykkaPaymentHelper->build($order, $this->merchant_id);
 
         ob_end_clean();
         // print "请求url" . $url_code . "";
@@ -223,7 +223,7 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
 
         return array(
             'result' => 'success',
-            'redirect' => 'http://wordpress8.tt:8018/?page_id=8',
+            'redirect' => $url_code,
         );
     }
 
