@@ -5,11 +5,11 @@
  * @extends WC_Payment_Gateway
  */
 
+use lib\Paykka\Request\PaykkaRequestHandler;
+
+
 class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
 {
-
-
-    private $private_key;
     private $merchant_id;
 
     public function __construct()
@@ -48,6 +48,8 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
 
         // 回调
         add_action('woocommerce_api_wc_gateway_custom_payment_callback', array($this, 'handle_payment_callback'));
+
+
     }
 
     public function init_form_fields()
@@ -147,6 +149,7 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
 
     public function payment_scripts()
     {
+
         // echo '<script>console.log("准备下单")</script>';
     }
 
@@ -182,9 +185,16 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
 
     public function process_payment($order_id)
     {
+
         ob_start();
         // 真实代码
         $order = wc_get_order($order_id);
+        // $order_data = json_encode($order->get_data(), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+        // error_log("Order Data: \n" . $order_data);
+
+        // $cart_json = json_encode(WC()->cart->get_cart(), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+        // error_log("Cart Data: \n" . $cart_json);
+
 
         // $order->update_status('on-hold', __('Awaiting custom payment', 'woocommerce-custom-payment-gateway'));
 
@@ -199,7 +209,13 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
 
         // 返回成功和重定向链接
 
-        $url_code = $this->do_paykka_payment($order);
+        // $url_code = $this->do_paykka_payment($order);
+        require_once FENGQIAO_PAYKKA_URL . '\classes\lib\Paykka\Request\PaykkaRequestHandler.php';
+
+        $paykkaPaymentHelper = new PaykkaRequestHandler();
+        error_log("PaykkaRequestHandler: \n");
+        $paykkaPaymentHelper->build($order, $this->merchant_id);
+
         ob_end_clean();
         // print "请求url" . $url_code . "";
 
@@ -207,7 +223,7 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
 
         return array(
             'result' => 'success',
-            'redirect' => $url_code,
+            'redirect' => 'http://wordpress8.tt:8018/?page_id=8',
         );
     }
 
@@ -245,7 +261,7 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
 
         $http_body = '{
             "version": "v1.0",
-            "merchant_id": "'.$this->merchant_id.'",
+            "merchant_id": "' . $this->merchant_id . '",
             "payment_type": "PURCHASE",
             "trans_id": "m' . $timestamp . '",
             "timestamp": ' . $timestamp . ',

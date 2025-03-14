@@ -5,13 +5,13 @@
  * Plugin URI:        http://www.angelleye.com/product/PayKKa-for-woocommerce-plugin/
  * Description:       Easily add the PayKKa Complete Payments Platform including PayKKa Checkout, Pay Later, Venmo, Direct Credit Processing, and alternative payment methods like Apple Pay, Google Pay, and more! Also fully supports Braintree Payments.
  * Version:           4.5.21
- * Author:            Angell EYE
- * Author URI:        http://www.angelleye.com/
+ * Author:            Fengqiao Yi
+ * Author URI:        https://github.com/1404369980/paykka-for-woocommerce.git
  * License:           GNU General Public License v3.0
  * License URI:       http://www.gnu.org/licenses/gpl-3.0.html
  * Text Domain:       paykka-for-woocommerce
  * Domain Path:       /i18n/languages/
- * GitHub Plugin URI: https://github.com/angelleye/PayKKa-woocommerce
+ * GitHub Plugin URI: https://github.com/1404369980/paykka-for-woocommerce.git
  * Requires at least: 5.8
  * Tested up to: 6.6.2
  * Requires Plugins: woocommerce
@@ -29,7 +29,7 @@
  defined( 'ABSPATH' ) || exit;
 
 if (! defined('FENGQIAO_PAYKKA_URL')) {
-	define('FENGQIAO_PAYKKA_URL', plugin_dir_url(__FILE__));
+	define('FENGQIAO_PAYKKA_URL', plugin_dir_path(__FILE__));
 }
 
 
