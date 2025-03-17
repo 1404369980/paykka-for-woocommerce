@@ -32,6 +32,12 @@ if (! defined('FENGQIAO_PAYKKA_URL')) {
 	define('FENGQIAO_PAYKKA_URL', plugin_dir_path(__FILE__));
 }
 
+// 交易回调
+// require_once FENGQIAO_PAYKKA_URL . '\classes\lib\Paykka\Request\PaykkaWebHookHandler.php';
+
+// 引入 Webhook 处理类
+require_once plugin_dir_path(__FILE__) . 'classes/lib/Paykka/Request/PaykkaWebHookHandler.php';
+
 
 add_action( 'plugins_loaded', 'woocommerce_paykka_init', 0 );
 function woocommerce_paykka_init() {
@@ -57,6 +63,8 @@ function woocommerce_paykka_init() {
 	function plugin_url_paykka() {
 		return untrailingslashit( plugins_url( '/', __FILE__ ) );
 	}
+    // 初始化 Webhook 处理类
+    new \lib\Paykka\Request\PaykkaWebHookHandler();
 
     require_once plugin_basename( 'classes/wc-paykka-credit-card-gateway.php' );
 }
@@ -87,45 +95,6 @@ add_action('before_woocommerce_init', function () {
     }
 });
 
-
-
-// class Init_Paykka_Gateway{
-
-//     public function __construct(){
-//         add_action('plugins_loaded', array($this, 'init'), 10);
-//     }
-
-//     public function init(){
-//         // wc-paykka-credit-card-gateway
-//         add_filter('woocommerce_payment_gateways', array($this, 'add_paykka_gateway'));
-//     }
-
-//     public function add_paykka_pro_gateway($methods){
-//         include_once(dirname(__FILE__) . '/classes/wc-paykka-credit-card-gateway.php');
-//         if (class_exists('Paykka_Credit_Card_Gateway')) {
-//             error_log('PayKKa Gateway Registered Successfully');
-//             $methods[] = 'Paykka_Credit_Card_Gateway';
-//         } else {
-//             error_log('Error: PayKKa Gateway Class Not Found');
-//         }
-//         return $methods;
-//     }
-
-
-//     public function add_paykka_gateway($gateways){
-//         include_once(dirname(__FILE__) . '/classes/wc-paykka-credit-card-gateway.php');
-//         if (class_exists('Paykka_Credit_Card_Gateway')) {
-//             error_log('PayKKa Gateway Registered Successfully');
-//             $gateways[] = 'Paykka_Credit_Card_Gateway';
-//         } else {
-//             error_log('Error: PayKKa Gateway Class Not Found');
-//         }
-//         return $gateways;
-//     }
-
-// }
-
-// new Init_Paykka_Gateway();
 
 // add_action('wp_footer', function () {
 //     $available_gateways = WC()->payment_gateways->get_available_payment_gateways();

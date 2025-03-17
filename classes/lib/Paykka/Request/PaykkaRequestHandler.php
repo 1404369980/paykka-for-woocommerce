@@ -7,14 +7,16 @@ use lib\Paykka\Api\Goods;
 use lib\Paykka\Api\PayCustomer;
 use lib\Paykka\Api\PaymentInfo;
 use lib\Paykka\Api\PaymentRequest;
+use lib\Paykka\Request\PaykkaWebHookHandler;
 
 
-require_once FENGQIAO_PAYKKA_URL . '\classes\lib\Paykka\Api\Bill.php';
-require_once FENGQIAO_PAYKKA_URL . '\classes\lib\Paykka\Api\Shipping.php';
-require_once FENGQIAO_PAYKKA_URL . '\classes\lib\Paykka\Api\Goods.php';
-require_once FENGQIAO_PAYKKA_URL . '\classes\lib\Paykka\Api\PayCustomer.php';
-require_once FENGQIAO_PAYKKA_URL . '\classes\lib\Paykka\Api\PaymentInfo.php';
-require_once FENGQIAO_PAYKKA_URL . '\classes\lib\Paykka\Api\PaymentRequest.php';
+require_once FENGQIAO_PAYKKA_URL . '/classes/lib/Paykka/Api/Bill.php';
+require_once FENGQIAO_PAYKKA_URL . '/classes/lib/Paykka/Api/Shipping.php';
+require_once FENGQIAO_PAYKKA_URL . '/classes/lib/Paykka/Api/Goods.php';
+require_once FENGQIAO_PAYKKA_URL . '/classes/lib/Paykka/Api/PayCustomer.php';
+require_once FENGQIAO_PAYKKA_URL . '/classes/lib/Paykka/Api/PaymentInfo.php';
+require_once FENGQIAO_PAYKKA_URL . '/classes/lib/Paykka/Api/PaymentRequest.php';
+require_once FENGQIAO_PAYKKA_URL . '/classes/lib/Paykka/Request/PaykkaWebHookHandler.php';
 
 
 class PaykkaRequestHandler
@@ -33,6 +35,8 @@ class PaykkaRequestHandler
         $timestamp = round(microtime(true) * 1000);
         $callback_url = add_query_arg('wc-api', 'WC_Gateway_Custom_Payment_callback', home_url('/')) . "&order_id=" . $order->get_id();
 
+        $notify_url = rest_url(PaykkaWebHookHandler::$WEB_HOOK_URL);
+
         $paymentRequest = new PaymentRequest();
         $paymentRequest->version = 'v1.0';
         $paymentRequest->__set('merchant_id', $PAYKKA_MERCHANT_ID);
@@ -41,7 +45,7 @@ class PaykkaRequestHandler
         $paymentRequest->__set('timestamp', $timestamp);
         $paymentRequest->__set('currency', $order->get_currency());
         $paymentRequest->__set('amount', $order->get_total() * 100);
-        $paymentRequest->__set('notify_url', 'https://pub-dev.eu.paykka.com/prefix/callback?id=m11785643765251');
+        $paymentRequest->__set('notify_url', $notify_url);
         $paymentRequest->__set('return_url', $callback_url);
         $paymentRequest->__set('expire_time', $expire_time);
         $paymentRequest->__set('session_mode', 'HOST');
@@ -52,7 +56,7 @@ class PaykkaRequestHandler
         $paymentRequest->customer = $this->buildCustomer($order);
 
         $http_body = $paymentRequest->toJson();
-        error_log(message: "http_body: \n". $http_body);
+        // error_log(message: "http_body: \n". $http_body);
 
         //sign
         $signStr = $this->paykkaSign($PAYKKA_MERCHANT_ID, $timestamp, $http_body, $PAYKKA_API_KEY);
@@ -191,7 +195,7 @@ class PaykkaRequestHandler
 
         // 加载私钥
         // $PAYKKA_API_KEY = $this -> privateKeyStr;
-        error_log("response: \n" .$PAYKKA_API_KEY);
+        // error_log("response: \n" .$PAYKKA_API_KEY);
         $privateKey = openssl_pkey_get_private($PAYKKA_API_KEY);
         if (!$privateKey) {
             while ($error = openssl_error_string()) {

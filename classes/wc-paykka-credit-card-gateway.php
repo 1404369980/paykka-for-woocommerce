@@ -6,6 +6,7 @@
  */
 
 use lib\Paykka\Request\PaykkaRequestHandler;
+use lib\Paykka\Request\PaykkaWeb;
 
 
 class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
@@ -211,7 +212,7 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
         // 返回成功和重定向链接
 
         // $url_code = $this->do_paykka_payment($order);
-        require_once FENGQIAO_PAYKKA_URL . '\classes\lib\Paykka\Request\PaykkaRequestHandler.php';
+        require_once FENGQIAO_PAYKKA_URL . 'classes/lib/Paykka/Request/PaykkaRequestHandler.php';
 
         $paykkaPaymentHelper = new PaykkaRequestHandler();
         error_log("PaykkaRequestHandler: \n");
