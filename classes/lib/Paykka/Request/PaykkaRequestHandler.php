@@ -21,7 +21,7 @@ class PaykkaRequestHandler
 {
 
 
-    public function build($order, $PAYKKA_MERCHANT_ID)
+    public function build($order, $PAYKKA_MERCHANT_ID, $PAYKKA_API_KEY)
     {
 
         $now = new \DateTime('now', new \DateTimeZone('UTC'));
@@ -55,7 +55,7 @@ class PaykkaRequestHandler
         error_log(message: "http_body: \n". $http_body);
 
         //sign
-        $signStr = $this->paykkaSign($PAYKKA_MERCHANT_ID, $timestamp, $http_body);
+        $signStr = $this->paykkaSign($PAYKKA_MERCHANT_ID, $timestamp, $http_body, $PAYKKA_API_KEY);
 
         error_log("signStr: \n" .$signStr);
         // 定义请求头
@@ -181,7 +181,7 @@ class PaykkaRequestHandler
     /**
      * 下单签名
      */
-    public function paykkaSign($merchantId, $timestamp, $requestBody)
+    public function paykkaSign($merchantId, $timestamp, $requestBody, $PAYKKA_API_KEY)
     {
         // 签名格式
         $FORMAT = "merchantId=%s&timestamp=%s&requestBody=%s";
@@ -190,7 +190,8 @@ class PaykkaRequestHandler
         $content = sprintf($FORMAT, $merchantId, $timestamp, $requestBody);
 
         // 加载私钥
-        $PAYKKA_API_KEY = $this -> privateKeyStr;
+        // $PAYKKA_API_KEY = $this -> privateKeyStr;
+        error_log("response: \n" .$PAYKKA_API_KEY);
         $privateKey = openssl_pkey_get_private($PAYKKA_API_KEY);
         if (!$privateKey) {
             while ($error = openssl_error_string()) {

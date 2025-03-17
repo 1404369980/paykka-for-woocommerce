@@ -39,7 +39,8 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
         $this->description = $this->get_option('description');
         $this->enabled = $this->get_option('enabled');
         $this->testmode = 'yes' === $this->get_option('testmode');
-        $this->private_key = $this->testmode ? $this->get_option('test_private_key') : $this->get_option('private_key');
+        $this->private_key = $this->testmode ? $this->get_option('sandbox_private_key') : $this->get_option('private_key');
+
         $this->publishable_key = $this->testmode ? $this->get_option('test_publishable_key') : $this->get_option('publishable_key');
         $this->merchant_id = $this->testmode ? $this->get_option('merchant_id') : $this->get_option('sandbox_merchant_id');
         // 这个动作挂钩保存设置
@@ -94,7 +95,7 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
             ),
             'sandbox_private_key' => array(
                 'title' => __('Sandbox Private Key', 'paykka-for-woocommerce'),
-                'type' => 'password',
+                'type' => 'textarea',
                 'description' => __('Get your API keys from your PayKKa account.', 'paykka-for-woocommerce'),
                 'default' => '',
                 'desc_tip' => true,
@@ -118,7 +119,7 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
             ),
             'private_key' => array(
                 'title' => __('Live Private Key', 'paykka-for-woocommerce'),
-                'type' => 'password',
+                'type' => 'textarea',
                 'description' => __('Get your API keys from your PayKKa account.', 'paykka-for-woocommerce'),
                 'default' => '',
                 'desc_tip' => true,
@@ -214,7 +215,7 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
 
         $paykkaPaymentHelper = new PaykkaRequestHandler();
         error_log("PaykkaRequestHandler: \n");
-        $url_code = $paykkaPaymentHelper->build($order, $this->merchant_id);
+        $url_code = $paykkaPaymentHelper->build($order, $this->merchant_id, $this->private_key);
 
         ob_end_clean();
         // print "请求url" . $url_code . "";
