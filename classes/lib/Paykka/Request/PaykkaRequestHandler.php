@@ -8,6 +8,7 @@ use lib\Paykka\Api\PayCustomer;
 use lib\Paykka\Api\PaymentInfo;
 use lib\Paykka\Api\PaymentRequest;
 use lib\Paykka\Request\PaykkaWebHookHandler;
+use lib\Paykka\Request\PaykkaCallBackHandler;
 
 
 require_once FENGQIAO_PAYKKA_URL . '/classes/lib/Paykka/Api/Bill.php';
@@ -17,13 +18,23 @@ require_once FENGQIAO_PAYKKA_URL . '/classes/lib/Paykka/Api/PayCustomer.php';
 require_once FENGQIAO_PAYKKA_URL . '/classes/lib/Paykka/Api/PaymentInfo.php';
 require_once FENGQIAO_PAYKKA_URL . '/classes/lib/Paykka/Api/PaymentRequest.php';
 require_once FENGQIAO_PAYKKA_URL . '/classes/lib/Paykka/Request/PaykkaWebHookHandler.php';
-
+require_once FENGQIAO_PAYKKA_URL . '/classes/lib/Paykka/Request/PaykkaCallBackHandler.php';
 
 class PaykkaRequestHandler
 {
 
+    public function buildSessionId($order, $PAYKKA_MERCHANT_ID, $PAYKKA_API_KEY){
+        $response_data = $this->handler($order, $PAYKKA_MERCHANT_ID, $PAYKKA_API_KEY);
+        return $response_data['data']['session_id'];
+    }
 
-    public function build($order, $PAYKKA_MERCHANT_ID, $PAYKKA_API_KEY)
+    public function buildSessionUrl($order, $PAYKKA_MERCHANT_ID, $PAYKKA_API_KEY){
+        $response_data = $this->handler($order, $PAYKKA_MERCHANT_ID, $PAYKKA_API_KEY);
+        return $response_data['data']['session_url'];
+    }
+
+
+    public function handler($order, $PAYKKA_MERCHANT_ID, $PAYKKA_API_KEY)
     {
 
         $now = new \DateTime('now', new \DateTimeZone('UTC'));
@@ -33,7 +44,7 @@ class PaykkaRequestHandler
         $now->add(new \DateInterval('PT5M'));
         $expire_time = $now->format('Y-m-d H:i:s');
         $timestamp = round(microtime(true) * 1000);
-        $callback_url = add_query_arg('wc-api', 'WC_Gateway_Custom_Payment_callback', home_url('/')) . "&order_id=" . $order->get_id();
+        $callback_url = add_query_arg('wc-api', PaykkaCallBackHandler::$CALLBACK_CODE, home_url('/')) . "&order_id=" . $order->get_id();
 
         $notify_url = rest_url(PaykkaWebHookHandler::$WEB_HOOK_URL);
 
@@ -56,7 +67,7 @@ class PaykkaRequestHandler
         $paymentRequest->customer = $this->buildCustomer($order);
 
         $http_body = $paymentRequest->toJson();
-        // error_log(message: "http_body: \n". $http_body);
+        error_log(message: "http_body: \n". $http_body);
 
         //sign
         $signStr = $this->paykkaSign($PAYKKA_MERCHANT_ID, $timestamp, $http_body, $PAYKKA_API_KEY);
@@ -69,13 +80,13 @@ class PaykkaRequestHandler
             'type' => 'RSA256' // 添加认证头
         );
 
-        $response = wp_remote_post('https://pub-dev.eu.paykka.com/apis/session', array(
+        $response = wp_remote_post('https://pub-fat.eu.paykka.com/apis/session', array(
         // $response = wp_remote_post('http://localhost:8080/apis/session', array(
             'headers' => $headers,
             'body' => $http_body,
         ));
 
-        error_log("response: \n");
+        // error_log("response: \n", $http_body);
 
         // 检查请求是否出错
         if (is_wp_error($response)) {
@@ -89,7 +100,7 @@ class PaykkaRequestHandler
         error_log("response_body: \n" . $response_body);
 
         // echo '<script>console.log("回调准备' . $data . '")</script>';
-        return $response_data['data']['session_url'];
+        return $response_data;
     }
 
     private function buildBill($order)
@@ -152,8 +163,8 @@ class PaykkaRequestHandler
 
         $customer = new PayCustomer();
         $customer->id = $order->get_user_id();
-        $customer->registration_time  = $user->user_registered;  
-        $customer->email = $user->user_email; 
+        // $customer->registration_time  = $user->user_registered;  
+        // $customer->email = $user-> ; 
         $customer->order_ip = $order->get_customer_ip_address();
         return $customer;
     }

@@ -18,13 +18,13 @@ class PaykkaWebHookHandler
      * 注册 Webhook 端点
      */
     public function register_webhook_endpoint() {
-        error_log('Webhook endpoint registered'); // 调试日志
+        // error_log('Webhook endpoint registered'); // 调试日志
         register_rest_route('paykka/v1', '/webhook', array(
             'methods'  => 'POST',
             'callback' => array($this, 'handle_paykka_webhook_request'),
             'permission_callback' => '__return_true',
         ));
-        error_log('注册webhook成功');
+        // error_log('注册webhook成功');
     }
 
 
