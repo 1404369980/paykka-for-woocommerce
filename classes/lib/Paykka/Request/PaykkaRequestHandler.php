@@ -23,12 +23,14 @@ require_once FENGQIAO_PAYKKA_URL . '/classes/lib/Paykka/Request/PaykkaCallBackHa
 class PaykkaRequestHandler
 {
 
-    public function buildSessionId($order, $PAYKKA_MERCHANT_ID, $PAYKKA_API_KEY){
+    public function buildSessionId($order, $PAYKKA_MERCHANT_ID, $PAYKKA_API_KEY)
+    {
         $response_data = $this->handler($order, $PAYKKA_MERCHANT_ID, $PAYKKA_API_KEY);
         return $response_data['data']['session_id'];
     }
 
-    public function buildSessionUrl($order, $PAYKKA_MERCHANT_ID, $PAYKKA_API_KEY){
+    public function buildSessionUrl($order, $PAYKKA_MERCHANT_ID, $PAYKKA_API_KEY)
+    {
         $response_data = $this->handler($order, $PAYKKA_MERCHANT_ID, $PAYKKA_API_KEY);
         return $response_data['data']['session_url'];
     }
@@ -59,7 +61,7 @@ class PaykkaRequestHandler
         $paymentRequest->__set('trans_id', $order->get_id());
         $paymentRequest->__set('timestamp', $timestamp);
         $paymentRequest->__set('currency', $order->get_currency());
-        $paymentRequest->__set('amount',  $order_amount);
+        $paymentRequest->__set('amount', $order_amount);
         $paymentRequest->__set('notify_url', $notify_url);
         $paymentRequest->__set('return_url', $callback_url);
         $paymentRequest->__set('expire_time', $expire_time);
@@ -69,14 +71,15 @@ class PaykkaRequestHandler
         $paymentRequest->shipping = $this->buildShipping($order);
         $paymentRequest->goods = $this->buildGoodsItems($order);
         $paymentRequest->customer = $this->buildCustomer($order);
+        $paymentRequest->payment = new PaymentInfo();
 
         $http_body = $paymentRequest->toJson();
-        error_log(message: "http_body: \n". $http_body);
+        error_log(message: "http_body: \n" . $http_body);
 
         //sign
         $signStr = $this->paykkaSign($PAYKKA_MERCHANT_ID, $timestamp, $http_body, $PAYKKA_API_KEY);
 
-        error_log("signStr: \n" .$signStr);
+        error_log("signStr: \n" . $signStr);
         // 定义请求头
         $headers = array(
             'Content-Type' => 'application/json', // 设置内容类型为 JSON
@@ -86,6 +89,7 @@ class PaykkaRequestHandler
 
         $response = wp_remote_post('https://pub-fat.eu.paykka.com/apis/session', array(
         // $response = wp_remote_post('http://localhost:8080/apis/session', array(
+        // $response = wp_remote_post('https://sandbox.aq.paykka.com/apis/session', array(
             'headers' => $headers,
             'body' => $http_body,
         ));
@@ -126,8 +130,8 @@ class PaykkaRequestHandler
         $bill_phone_number = $order->get_billing_phone();
         if (!empty($bill_phone_number)) {
             $phone_parts = explode(' ', $bill_phone_number, 2);
-            $bill->area_code  = $phone_parts[0] ?? '';
-            $bill-> phone_number = $phone_parts[1] ?? $bill_phone_number;
+            $bill->area_code = $phone_parts[0] ?? '';
+            $bill->phone_number = $phone_parts[1] ?? $bill_phone_number;
         }
         // $bill->descriptor = $order->getdis();
         return $bill;
@@ -152,8 +156,8 @@ class PaykkaRequestHandler
         $ship_phone_number = $order->get_shipping_phone();
         if ($ship_phone_number != null) {
             $phone_parts = explode(' ', $ship_phone_number, 2);
-            $ship->area_code  = $phone_parts[0] ?? '';
-            $ship-> phone_number = $phone_parts[1] ?? $ship_phone_number;
+            $ship->area_code = $phone_parts[0] ?? '';
+            $ship->phone_number = $phone_parts[1] ?? $ship_phone_number;
         }
         // $ship-> phone_number = $order->get_shipping_phone();
         // $ship-> shipping_email = $order->get_shipping_email();
@@ -187,7 +191,7 @@ class PaykkaRequestHandler
             $goods->description = $product->get_description();
             // $goods->category =   wp_get_post_terms($goods->id, 'product_cat');
             // $goods-> brand = $item->get_name();
-            $goods->link = $product-> get_permalink(); 
+            $goods->link = $product->get_permalink();
             $goods->price = intval(round($product->get_price() * pow(10, $decimal_places)));
             $goods->quantity = $item->get_quantity();
             $goods->delivery_date = $product->get_meta('_delivery_date');
@@ -213,12 +217,25 @@ class PaykkaRequestHandler
         // 加载私钥
         // $PAYKKA_API_KEY = $this -> privateKeyStr;
         // error_log("response: \n" .$PAYKKA_API_KEY);
-        $privateKey = openssl_pkey_get_private($PAYKKA_API_KEY);
+        $api_key = null;
+        if (strpos($PAYKKA_API_KEY, '-----BEGIN') === 0) {
+            $api_key = $PAYKKA_API_KEY;
+        } else {
+            // 格式化密钥为 PEM
+            $formatted_key = "-----BEGIN PRIVATE KEY-----\n";
+            $formatted_key .= chunk_split($PAYKKA_API_KEY, 64, "\n");
+            $formatted_key .= "-----END PRIVATE KEY-----\n";
+
+            $api_key = $formatted_key;
+        }
+
+
+        $privateKey = openssl_pkey_get_private($api_key);
         if (!$privateKey) {
             while ($error = openssl_error_string()) {
                 error_log($error);
             }
-            die("无法加载私钥" . $PAYKKA_API_KEY);
+            die("无法加载私钥" . $api_key);
         }
 
         $signature = null;
