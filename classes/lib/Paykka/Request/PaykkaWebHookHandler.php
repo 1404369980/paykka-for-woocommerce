@@ -13,6 +13,10 @@ class PaykkaWebHookHandler
         add_action('rest_api_init', array($this, 'register_webhook_endpoint'));
     }
 
+    public static function getWebHookUrl(){
+        return rest_url(PaykkaWebHookHandler::$WEB_HOOK_URL);
+    }
+
 
       /**
      * 注册 Webhook 端点

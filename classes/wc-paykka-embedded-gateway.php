@@ -6,6 +6,8 @@
  */
 
 use lib\Paykka\Request\PaykkaRequestHandler;
+use lib\Paykka\Request\PaykkaWebHookHandler;
+use lib\Paykka\Request\PaykkaCallBackHandler;
 
 
 class Paykka_Embedded_Gateway extends WC_Payment_Gateway
@@ -138,7 +140,7 @@ class Paykka_Embedded_Gateway extends WC_Payment_Gateway
                 'default' => '',
                 'desc_tip' => true
             ),
-            
+
         );
     }
 
@@ -213,8 +215,10 @@ class Paykka_Embedded_Gateway extends WC_Payment_Gateway
         // 返回成功和重定向链接
 
         // $url_code = $this->do_paykka_payment($order);
-        
+
         require_once FENGQIAO_PAYKKA_URL . 'classes/lib/Paykka/Request/PaykkaRequestHandler.php';
+        require_once FENGQIAO_PAYKKA_URL . '/classes/lib/Paykka/Request/PaykkaWebHookHandler.php';
+        require_once FENGQIAO_PAYKKA_URL . '/classes/lib/Paykka/Request/PaykkaCallBackHandler.php';
 
         $paykkaPaymentHelper = new PaykkaRequestHandler();
         error_log("PaykkaRequestHandler: \n");
@@ -226,11 +230,23 @@ class Paykka_Embedded_Gateway extends WC_Payment_Gateway
 
         $order->update_status('pending', '等待跳转到收银台');
         $page = get_page_by_path('paykka-payment');
-        error_log("url:".get_permalink($page->ID));
+        error_log("url:" . get_permalink($page->ID));
+
+        $callback_url = PaykkaCallBackHandler::getCallbackUrl($order->get_id());
+        $notify_url = PaykkaWebHookHandler::getWebHookUrl();
+
+        WC()->session->__unset('woocommerce_order_id');
+        WC()->session->__unset('paykka_session_id');
+        WC()->session->__unset('paykka_client_key');
+        WC()->session->__unset('paykka_callback_url');
+        WC()->session->__unset('paykka_notify_url');
 
         WC()->session->set('woocommerce_order_id', $order_id);
         WC()->session->set('paykka_session_id', $session_id);
         WC()->session->set('paykka_client_key', $this->client_key);
+        WC()->session->set('paykka_callback_url', $callback_url);
+        WC()->session->set('paykka_notify_url', $notify_url);
+
 
 
         error_log("WC()->session:" . WC()->session->get('paykka_session_id'));
@@ -243,7 +259,7 @@ class Paykka_Embedded_Gateway extends WC_Payment_Gateway
 
         return [
             'result' => 'success',
-            'redirect' => get_permalink($page->ID) ."&order_id=" .$order_id,
+            'redirect' => get_permalink($page->ID),
         ];
     }
 

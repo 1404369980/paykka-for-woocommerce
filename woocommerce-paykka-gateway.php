@@ -41,7 +41,6 @@ if (!defined('PAYKKA_PLUGIN_URL')) {
 
 // 引入 Webhook 处理类
 require_once plugin_dir_path(__FILE__) . 'classes/lib/Paykka/Request/PaykkaWebHookHandler.php';
-require_once plugin_dir_path(__FILE__) . 'classes/lib/Paykka/Request/PaykkaCallBackHandler.php';
 
 
 add_action('plugins_loaded', 'woocommerce_paykka_init', 0);
@@ -74,6 +73,7 @@ function woocommerce_paykka_init()
         return untrailingslashit(plugins_url('/', __FILE__));
     }
     // 初始化 Webhook 处理类
+    require_once plugin_dir_path(__FILE__) . 'classes/lib/Paykka/Request/PaykkaCallBackHandler.php';
     new \lib\Paykka\Request\PaykkaWebHookHandler();
     new \lib\Paykka\Request\PaykkaCallBackHandler();
 
@@ -125,7 +125,7 @@ function paykka_create_payment_page()
         $page_id = wp_insert_post([
             'post_title' => $page_title,
             'post_content' => $page_content,
-            'post_status' => 'publish',
+            'post_status' => 'private',
             'post_type' => 'page',
             'post_name' => $page_slug,
         ]);

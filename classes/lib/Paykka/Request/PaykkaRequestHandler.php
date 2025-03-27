@@ -44,9 +44,9 @@ class PaykkaRequestHandler
         $now->add(new \DateInterval('PT5M'));
         $expire_time = $now->format('Y-m-d H:i:s');
         $timestamp = round(microtime(true) * 1000);
-        $callback_url = add_query_arg('wc-api', PaykkaCallBackHandler::$CALLBACK_CODE, home_url('/')) . "&order_id=" . $order->get_id();
 
-        $notify_url = rest_url(PaykkaWebHookHandler::$WEB_HOOK_URL);
+        $callback_url = PaykkaCallBackHandler::getCallbackUrl($order->get_id());
+        $notify_url = PaykkaWebHookHandler::getWebHookUrl();
 
         $paymentRequest = new PaymentRequest();
         $paymentRequest->version = 'v1.0';
