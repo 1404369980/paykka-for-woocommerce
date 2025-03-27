@@ -37,7 +37,7 @@ class PaykkaCallBackHandler
         // $return_url = $this -> gateway->get_return_url($order);
 
         ob_end_clean();
-        wp_safe_redirect(wc_get_account_endpoint_url('orders'));
+        wp_safe_redirect(wc_get_endpoint_url('view-order', $order_id, wc_get_page_permalink('myaccount')));
         exit;
     }
 
