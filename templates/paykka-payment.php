@@ -29,7 +29,10 @@ get_header(); ?>
 
         console.log("PaykkaCardCheckoutUI", PaykkaCardCheckoutUI);
 
-        const { Card, ApplePay, GooglePay, setRadarEnv, PayKKaCheckout } = PaykkaCardCheckoutUI;
+        const { Card, ApplePay, GooglePay, setFraudDetectionEnv, PayKKaCheckout, setApiUrl, setCDNUrl } = PaykkaCardCheckoutUI;
+
+        setApiUrl('https://checkout-fat.eu.paykka.com')
+        setCDNUrl('https://checkout-fat.eu.paykka.com/cp')
 
         const paykkaCheckout = new PayKKaCheckout({
             sessionId: '<?php echo esc_html(WC()->session->get('paykka_session_id')) ?>',
@@ -37,11 +40,13 @@ get_header(); ?>
             // sessionId: 'CS205752350276680803',
             // clientKey: 'ck_945bb1f80011be2e932c1651dda8bb39',
             hidePaymentButton: false, // 隐藏按钮
-            sandbox: true
+            // sandbox: true
         })
 
-        setRadarEnv({
-            STRIPE_RADAR: 'pk_test_51QaC2P5VarcojPHdg13yagk5TqrGkIkeK8I21BgQUZe8BzyRmbtmOg3dKsXjkxt6JlsjyjJMTvBH9dFMCZWRxOkt00tWQ1eHFU'
+        
+
+        setFraudDetectionEnv({
+            SR: 'pk_test_51QaC2P5VarcojPHdg13yagk5TqrGkIkeK8I21BgQUZe8BzyRmbtmOg3dKsXjkxt6JlsjyjJMTvBH9dFMCZWRxOkt00tWQ1eHFU'
         });
 
         const CheckoutCard = paykkaCheckout.create(Card, props);
