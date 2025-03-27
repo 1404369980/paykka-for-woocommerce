@@ -2,28 +2,25 @@
 /**
  * @wordpress-plugin
  * Plugin Name:       PayKKa for WooCommerce
- * Plugin URI:        http://www.angelleye.com/product/PayKKa-for-woocommerce-plugin/
- * Description:       Easily add the PayKKa Complete Payments Platform including PayKKa Checkout, Pay Later, Venmo, Direct Credit Processing, and alternative payment methods like Apple Pay, Google Pay, and more! Also fully supports Braintree Payments.
- * Version:           4.5.21
+ * Plugin URI:        https://github.com/1404369980/paykka-for-woocommerce
+ * Description:       Easily add the PayKKa Complete Payments Platform including PayKKa Checkout, Direct Credit Processing, and alternative payment methods like Apple Pay, Google Pay.
+ * Version:           1.0.0
  * Author:            Fengqiao Yi
- * Author URI:        https://github.com/1404369980/paykka-for-woocommerce.git
+ * Author URI:        https://github.com/1404369980/paykka-for-woocommerce
  * License:           GNU General Public License v3.0
  * License URI:       http://www.gnu.org/licenses/gpl-3.0.html
  * Text Domain:       paykka-for-woocommerce
  * Domain Path:       /i18n/languages/
- * GitHub Plugin URI: https://github.com/1404369980/paykka-for-woocommerce.git
- * Requires at least: 5.8
+ * GitHub Plugin URI: https://github.com/1404369980/paykka-for-woocommerce
+ * Requires at least: 6.0
  * Tested up to: 6.6.2
  * Requires Plugins: woocommerce
- * WC requires at least: 3.0.0
- * WC tested up to: 9.3.2
+ * WC requires at least: 9.0.0
+ * WC tested up to: 9.6.2
  *
  * ************
  * Attribution
  * ************
- * PayKKa for WooCommerce is a derivative work of the code from WooThemes / SkyVerge,
- * which is licensed with GPLv3. This code is also licensed under the terms
- * of the GNU Public License, version 3.
  */
 
 defined('ABSPATH') || exit;
