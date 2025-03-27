@@ -48,6 +48,10 @@ class PaykkaRequestHandler
         $callback_url = PaykkaCallBackHandler::getCallbackUrl($order->get_id());
         $notify_url = PaykkaWebHookHandler::getWebHookUrl();
 
+        // 币种金额
+        $decimal_places = get_option('woocommerce_price_num_decimals', 2);
+        $order_amount = intval(round($order->get_total() * pow(10, $decimal_places)));
+
         $paymentRequest = new PaymentRequest();
         $paymentRequest->version = 'v1.0';
         $paymentRequest->__set('merchant_id', $PAYKKA_MERCHANT_ID);
@@ -55,7 +59,7 @@ class PaykkaRequestHandler
         $paymentRequest->__set('trans_id', $order->get_id());
         $paymentRequest->__set('timestamp', $timestamp);
         $paymentRequest->__set('currency', $order->get_currency());
-        $paymentRequest->__set('amount', $order->get_total() * 100);
+        $paymentRequest->__set('amount',  $order_amount);
         $paymentRequest->__set('notify_url', $notify_url);
         $paymentRequest->__set('return_url', $callback_url);
         $paymentRequest->__set('expire_time', $expire_time);
@@ -171,6 +175,8 @@ class PaykkaRequestHandler
 
     private function buildGoodsItems($order)
     {
+
+        $decimal_places = get_option('woocommerce_price_num_decimals', 2);
         $goods_items = [];
         foreach ($order->get_items() as $item_id => $item) {
             $product = $item->get_product();
@@ -179,10 +185,10 @@ class PaykkaRequestHandler
             $goods->id = $product->get_id();
             $goods->name = $product->get_name();
             $goods->description = $product->get_description();
-            $goods->category =   wp_get_post_terms($goods->id, 'product_cat');
+            // $goods->category =   wp_get_post_terms($goods->id, 'product_cat');
             // $goods-> brand = $item->get_name();
             $goods->link = $product-> get_permalink(); 
-            $goods->price = $product->get_price();
+            $goods->price = intval(round($product->get_price() * pow(10, $decimal_places)));
             $goods->quantity = $item->get_quantity();
             $goods->delivery_date = $product->get_meta('_delivery_date');
             $goods->picture_url = get_post_meta($goods->id, '_picture_url', true);
