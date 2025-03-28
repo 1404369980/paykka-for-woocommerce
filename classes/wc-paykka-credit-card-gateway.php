@@ -18,7 +18,7 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
         $this->id = 'paykka';
         $this->has_fields = false;
         $this->version = '8.2.0';
-        $this->icon = apply_filters('woocommerce_paykka_icon', plugin_dir_url(__FILE__) . '/assets/images/payway.png');
+        $this->icon = '';
         $this->method_description = __('Secure credit card payments via PayKKa.', 'paykka-for-woocommerce');
         $this->method_title = __('PayKKa Credit Card', 'paykka-for-woocommerce');
 
@@ -162,10 +162,9 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
 
     public function is_available()
     {
-
+        // 检查支付方式是否已启用
         if ($this->enabled !== 'yes') {
-            // error_log('PayKKa Gateway is NOT available: Disabled in settings.');
-            return true;
+            return false;
         }
 
         // 额外调试
