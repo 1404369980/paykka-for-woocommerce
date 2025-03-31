@@ -2,6 +2,7 @@
 namespace lib\Paykka\Request;
 
 use lib\Paykka\Api\Bill;
+use lib\Paykka\Api\Browser;
 use lib\Paykka\Api\Shipping;
 use lib\Paykka\Api\Goods;
 use lib\Paykka\Api\PayCustomer;
@@ -12,6 +13,7 @@ use lib\Paykka\Request\PaykkaCallBackHandler;
 
 
 require_once FENGQIAO_PAYKKA_URL . '/classes/lib/Paykka/Api/Bill.php';
+require_once FENGQIAO_PAYKKA_URL . '/classes/lib/Paykka/Api/Browser.php';
 require_once FENGQIAO_PAYKKA_URL . '/classes/lib/Paykka/Api/Shipping.php';
 require_once FENGQIAO_PAYKKA_URL . '/classes/lib/Paykka/Api/Goods.php';
 require_once FENGQIAO_PAYKKA_URL . '/classes/lib/Paykka/Api/PayCustomer.php';
@@ -25,18 +27,18 @@ class PaykkaRequestHandler
 
     public function buildSessionId($order, $PAYKKA_MERCHANT_ID, $PAYKKA_API_KEY)
     {
-        $response_data = $this->handler($order, $PAYKKA_MERCHANT_ID, $PAYKKA_API_KEY);
+        $response_data = $this->handlerSession($order, $PAYKKA_MERCHANT_ID, $PAYKKA_API_KEY);
         return $response_data['data']['session_id'];
     }
 
     public function buildSessionUrl($order, $PAYKKA_MERCHANT_ID, $PAYKKA_API_KEY)
     {
-        $response_data = $this->handler($order, $PAYKKA_MERCHANT_ID, $PAYKKA_API_KEY);
+        $response_data = $this->handlerSession($order, $PAYKKA_MERCHANT_ID, $PAYKKA_API_KEY);
         return $response_data['data']['session_url'];
     }
 
 
-    public function handler($order, $PAYKKA_MERCHANT_ID, $PAYKKA_API_KEY)
+    public function handlerSession($order, $PAYKKA_MERCHANT_ID, $PAYKKA_API_KEY)
     {
 
         $now = new \DateTime('now', new \DateTimeZone('UTC'));
@@ -88,6 +90,98 @@ class PaykkaRequestHandler
         );
 
         $response = wp_remote_post('https://pub-fat.eu.paykka.com/apis/session', array(
+        // $response = wp_remote_post('http://localhost:8080/apis/session', array(
+        // $response = wp_remote_post('https://sandbox.aq.paykka.com/apis/session', array(
+            'headers' => $headers,
+            'body' => $http_body,
+        ));
+
+        // error_log("response: \n", $http_body);
+
+        // 检查请求是否出错
+        if (is_wp_error($response)) {
+            wc_add_notice('Payment error: ' . $response->get_error_message(), 'error');
+            return;
+        }
+
+        $response_body = wp_remote_retrieve_body($response);
+        $response_data = json_decode($response_body, true);
+
+        error_log("response_body: \n" . $response_body);
+
+        // echo '<script>console.log("回调准备' . $data . '")</script>';
+        return $response_data;
+    }
+
+
+    public function handlerCardPayment($order, $PAYKKA_MERCHANT_ID, $PAYKKA_API_KEY, $card_encrypted_data)
+    {
+
+        $now = new \DateTime('now', new \DateTimeZone('UTC'));
+        // 转换为香港时间
+        $now->setTimezone(new \DateTimeZone('Asia/Hong_Kong'));
+        // 使用 DateInterval 对象来添加 5 分钟
+        $now->add(new \DateInterval('PT5M'));
+        $expire_time = $now->format('Y-m-d H:i:s');
+        $timestamp = round(microtime(true) * 1000);
+
+        $callback_url = PaykkaCallBackHandler::getCallbackUrl($order->get_id());
+        $notify_url = PaykkaWebHookHandler::getWebHookUrl();
+
+        // 币种金额
+        $decimal_places = get_option('woocommerce_price_num_decimals', 2);
+        $order_amount = intval(round($order->get_total() * pow(10, $decimal_places)));
+
+        $paymentRequest = new PaymentRequest();
+        $paymentRequest->version = 'v1.0';
+        $paymentRequest->__set('merchant_id', $PAYKKA_MERCHANT_ID);
+        $paymentRequest->__set('payment_type', 'PURCHASE');
+        $paymentRequest->__set('trans_id', $order->get_id());
+        $paymentRequest->__set('timestamp', $timestamp);
+        $paymentRequest->__set('currency', $order->get_currency());
+        $paymentRequest->__set('amount', $order_amount);
+        $paymentRequest->__set('notify_url', $notify_url);
+        $paymentRequest->__set('return_url', $callback_url);
+        $paymentRequest->__set('expire_time', $expire_time);
+        $paymentRequest->__set('session_mode', 'HOST');
+
+        $paymentRequest->bill = $this->buildBill($order);
+        $paymentRequest->shipping = $this->buildShipping($order);
+        $paymentRequest->goods = $this->buildGoodsItems($order);
+        $paymentRequest->customer = $this->buildCustomer($order);
+        $paymentRequest->browser = new Browser();
+
+        $card_encrypted_encode = json_encode($card_encrypted_data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
+        error_log("card_encrypted: \n" . $card_encrypted_encode);
+
+
+        $card_encrypted = json_decode($card_encrypted_encode, true);
+
+        $payment = new PaymentInfo();
+        // $card_encrypted = json_decode($card_encrypted_data, true);
+        $payment -> encrypted_card_no = $card_encrypted['encryptedCardNumber'];
+        $payment -> encrypted_exp_year = $card_encrypted['encryptedExpireYear'];
+        $payment -> encrypted_exp_month = $card_encrypted['encryptedExpireMonth'];
+        $payment -> encrypted_cvv = $card_encrypted['encryptedCVV'];
+        // $payment -> holder_name = 'BANKCARD';
+        $payment -> payment_method = 'BANKCARD';
+        $paymentRequest->payment = $payment ;
+
+        $http_body = $paymentRequest->toJson();
+        error_log(message: "http_body: \n" . $http_body);
+
+        //sign
+        $signStr = $this->paykkaSign($PAYKKA_MERCHANT_ID, $timestamp, $http_body, $PAYKKA_API_KEY);
+
+        error_log("signStr: \n" . $signStr);
+        // 定义请求头
+        $headers = array(
+            'Content-Type' => 'application/json', // 设置内容类型为 JSON
+            'signature' => $signStr,
+            'type' => 'RSA256' // 添加认证头
+        );
+
+        $response = wp_remote_post('https://pub-fat.eu.paykka.com/apis/payments', array(
         // $response = wp_remote_post('http://localhost:8080/apis/session', array(
         // $response = wp_remote_post('https://sandbox.aq.paykka.com/apis/session', array(
             'headers' => $headers,
@@ -174,6 +268,7 @@ class PaykkaRequestHandler
         // $customer->registration_time  = $user->user_registered;  
         // $customer->email = $user-> ; 
         $customer->order_ip = $order->get_customer_ip_address();
+        $customer -> pay_ip = '127.0.0.1';
         return $customer;
     }
 

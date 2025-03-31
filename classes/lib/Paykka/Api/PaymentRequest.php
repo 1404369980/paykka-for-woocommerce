@@ -21,6 +21,7 @@ class PaymentRequest {
     public $shipping;
     public $customer;
     public $payment;
+    public $browser;
     public $authentication;
 
     public function __get($property) {
@@ -53,6 +54,7 @@ class PaymentRequest {
             'theme_id' => $this->theme_id,
             'goods' => array_map(fn($good) => $this->objectToArray($good), $this->goods),
             'bill' => $this->objectToArray($this->bill),
+            'browser' => $this->objectToArray($this->browser),
             'shipping' => $this->objectToArray($this->shipping),
             'customer' => $this->objectToArray($this->customer),
             'payment' => $this->objectToArray($this->payment),
