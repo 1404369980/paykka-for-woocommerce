@@ -40,6 +40,4 @@ class PaykkaCallBackHandler
         wp_safe_redirect(wc_get_endpoint_url('view-order', $order_id, wc_get_page_permalink('myaccount')));
         exit;
     }
-
-
 }
