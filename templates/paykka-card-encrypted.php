@@ -28,6 +28,10 @@ if (!defined('ABSPATH')) {
 
 <script type="text/javascript">
     document.addEventListener('DOMContentLoaded', function () {
+
+
+
+
         const PayKKaEncryptedCard = window.PayKKaCardCheckoutEncryptedCard || window.PaykkaCardCheckoutEncryptedCard;
 
         PayKKaEncryptedCard.setEnv({
@@ -65,8 +69,18 @@ if (!defined('ABSPATH')) {
             }
         });
 
+        // 防抖控制相关变量
+        let isProcessing = false;
+        // 获取按钮引用
+        const payButton = document.querySelector('#encryptedCardWrapper button');
+
         window.handleClick = function () {
             console.log("点击支付按钮，开始加密...");
+            // 禁用按钮并添加状态
+            isProcessing = true;
+            payButton.disabled = true;
+            payButton.style.opacity = '0.7';
+            payButton.textContent = '处理中...';
             // 加密
             EncryptedCard.encrypt();
         };
@@ -80,7 +94,7 @@ if (!defined('ABSPATH')) {
 
             // 发送 AJAX 请求
             fetch('<?php echo rest_url('/paykka/v1/encrypted_card') ?>', {
-            // fetch('/wp-json/paykka/v1/encrypted_card', {
+                // fetch('/wp-json/paykka/v1/encrypted_card', {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json"
@@ -97,8 +111,19 @@ if (!defined('ABSPATH')) {
                         window.location.href = result.redirect_url;
                     } else {
                         document.getElementById("error_message").textContent = result.message;
+                        isProcessing = false;
+                        payButton.disabled = false;
+                        payButton.style.opacity = '1';
+                        payButton.textContent = '支付';
                     }
-                }).catch(error => console.error("请求失败:", error));
+                }).catch(error => {
+                    document.getElementById("error_message").textContent = error;
+                    console.error("请求失败:", error)
+                    isProcessing = false;
+                    payButton.disabled = false;
+                    payButton.style.opacity = '1';
+                    payButton.textContent = '支付';
+                });
         };
 
     });

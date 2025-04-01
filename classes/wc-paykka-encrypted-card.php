@@ -230,7 +230,7 @@ class Paykka_Encrypted_Card_Gateway extends WC_Payment_Gateway
         // $browser -> screen_width = $browser_info['screenWidth'];
         // $browser -> device_finger_print_id = $browser_info['userAgent'];
         // $browser -> fraud_detection_id = $browser_info['userAgent'];
-        
+
         $encrypted_card_data = $params['encrypted_card_data'];
         $order_id = $params['order_id'];
 
@@ -238,14 +238,35 @@ class Paykka_Encrypted_Card_Gateway extends WC_Payment_Gateway
 
         $paykkaPaymentHelper = new PaykkaRequestHandler();
         error_log("PaykkaRequestHandler: \n");
-        $session_id = $paykkaPaymentHelper->handlerCardPayment($order, $this->merchant_id, $this->private_key, $encrypted_card_data);
+        $response_data = $paykkaPaymentHelper->handlerCardPayment($order, $this->merchant_id, $this->private_key, $encrypted_card_data);
         error_log("payment_complete: \n");
         $order->payment_complete();
 
-        return new WP_REST_Response([
-            'success' => true,
-            'redirect_url' => $this->get_return_url($order)
-        ]);
+
+        if (!is_array($response_data)) {
+            throw new Exception('Invalid API response format');
+        }
+
+        if (isset($response_data['ret_code']) && $response_data['ret_code'] === '000000') {
+            return new WP_REST_Response([
+                'success' => true,
+                'redirect_url' => $this->get_return_url($order)
+            ]);
+        } else {
+            $error_message = isset($response_data['ret_msg']) ?sanitize_text_field($response_data['ret_msg']) : __('Payment processing failed', 'your-text-domain');
+
+            // 记录详细日志
+            error_log(sprintf(
+                '[Paykka Payment Error] Order %s - Code: %s, Message: %s',
+                $order instanceof WC_Order ? $order->get_id() : 'N/A',
+                $error_code,
+                $error_message
+            ));
+            return new WP_REST_Response([
+                'success' => false,
+                'message' => $error_message
+            ]);
+        }
     }
 
     public function register_encrypted_card_endpoint()
