@@ -1,13 +1,23 @@
 <?php
 if (!defined('ABSPATH')) {
     exit; // 确保安全性
-}
-
-get_header(); ?>
+} ?>
 
 <!-- 通过插入样式和脚本来显示支付组件 -->
 <link href="https://checkout-fat.eu.paykka.com/cp/style.css" rel="stylesheet" />
 <script type="text/javascript" src="https://checkout-fat.eu.paykka.com/cp/card-checkout-ui.js"></script>
+
+<div class="shop-content">
+    <!-- 主要支付内容 -->
+    <h2>Paykka 支付</h2>
+
+    <!-- 这里插入支付组件 -->
+    <div id="paykka_payform" style="display:flex;flex-direction: column;align-items: center;padding-bottom: 20px">
+        <div id="checkoutApplePayField" style="width:500px;padding-bottom: 20px"></div>
+        <div id="checkoutGooglePayField" style="width:500px;padding-bottom: 20px"></div>
+        <div id="checkoutCardField" style="width:500px;padding-bottom: 20px"></div>
+    </div>
+</div>
 
 
 <script type="text/javascript">
@@ -70,14 +80,3 @@ get_header(); ?>
 
 </script>
 
-<div class="shop-content">
-    <!-- 主要支付内容 -->
-    <h2>Paykka 支付</h2>
-
-    <!-- 这里插入支付组件 -->
-    <div id="paykka_payform" style="display:flex;flex-direction: column;align-items: center;padding-bottom: 20px">
-        <div id="checkoutApplePayField" style="width:500px;padding-bottom: 20px"></div>
-        <div id="checkoutGooglePayField" style="width:500px;padding-bottom: 20px"></div>
-        <div id="checkoutCardField" style="width:500px;padding-bottom: 20px"></div>
-    </div>
-</div>

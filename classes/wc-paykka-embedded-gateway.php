@@ -229,7 +229,7 @@ class Paykka_Embedded_Gateway extends WC_Payment_Gateway
 
 
         $order->update_status('pending', '等待跳转到收银台');
-        $page = get_page_by_path('paykka-payment');
+        $page = get_page_by_path('paykka-embedded');
         error_log("url:" . get_permalink($page->ID));
 
         $callback_url = PaykkaCallBackHandler::getCallbackUrl($order->get_id());

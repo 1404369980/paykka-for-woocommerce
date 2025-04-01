@@ -69,7 +69,7 @@ function woocommerce_paykka_init()
     require_once plugin_dir_path(__FILE__) . 'classes/lib/Paykka/Request/PaykkaWebHookHandler.php';
     new \lib\Paykka\Request\PaykkaWebHookHandler();
     new \lib\Paykka\Request\PaykkaCallBackHandler();
-    
+
     require_once plugin_basename('classes/wc-paykka-credit-card-gateway.php');
     require_once plugin_basename('classes/wc-paykka-embedded-gateway.php');
 
@@ -112,39 +112,33 @@ add_action('before_woocommerce_init', function () {
 // 插件激活时创建页面
 function paykka_create_payment_page()
 {
-    $page_title = 'Paykka Payment';
-    // $page_content = '[paykka_payment_shortcode]'; // 通过 Shortcode 加载支付内容
-    $page_content = '';
-    $page_slug = 'paykka-payment';
-
+    $page_slug = 'paykka-embedded';
     // 检查页面是否已存在
     $page_check = get_page_by_path($page_slug);
     if (!$page_check) {
-        $page_id = wp_insert_post([
-            'post_title' => $page_title,
-            'post_content' => $page_content,
+        $page_paykka_payment_id = wp_insert_post([
+            'post_title' => 'Paykka Embedded',
+            'post_content' => '[paykka-embedded]',
             'post_status' => 'private',
             'post_type' => 'page',
             'post_name' => $page_slug,
         ]);
-        // 关键：刷新 URL 规则
-
-        $page = get_page_by_path('paykka-payment');
-        error_log("url:" . get_permalink($page->id));
-        flush_rewrite_rules();
-
+        if ($page_paykka_payment_id) {
+            update_post_meta($page_paykka_payment_id, '_wp_page_template', 'default'); // 使用默认模板
+        }
+        // $page = get_page_by_path('paykka-payment');
+        // error_log("url:" . get_permalink($page->id));
     }
 
 
     $page_card_encry_slug = 'paykka-card-encrypted';
     $page_card_encry_check = get_page_by_path($page_card_encry_slug);
     if (!$page_card_encry_check) {
-        // $template_path = plugin_dir_path(__FILE__) . 'templates/paykka-card-encrypted.php';
         // $template_content = file_exists($template_path) ? file_get_contents($template_path) : '';
 
         $page_card_encry_slug_id = wp_insert_post([
             'post_title' => 'Paykka Encrypted Card Payment',
-            'post_content' =>  '[paykka-card-encrypted]',
+            'post_content' => '[paykka-card-encrypted]',
             'post_status' => 'private',
             'post_type' => 'page',
             'post_name' => $page_card_encry_slug,
@@ -153,41 +147,46 @@ function paykka_create_payment_page()
             update_post_meta($page_card_encry_slug_id, '_wp_page_template', 'default'); // 使用默认模板
         }
     }
-    // 关键：刷新 URL 规则
 
-    // $page = get_page_by_path($page_card_encry_slug);
-
-    // 关联自定义模板
-    // if ($page_card_encry_slug_id) {
-    //     update_post_meta($page_card_encry_slug_id, '_wp_page_template', 'templates/paykka-card-encrypted.php');
-    // }
-
-    // error_log("paykka-card-encrypted url:" . get_permalink($page->id));
+    // 刷新规则
     flush_rewrite_rules();
-
-    // }
 }
 register_activation_hook(__FILE__, 'paykka_create_payment_page');
 
-function paykka_custom_payment_template($template)
-{
-    if (is_page('paykka-payment')) {
-        return plugin_dir_path(__FILE__) . 'templates/paykka-payment.php';
-    }
-    return $template;
-}
-add_filter('template_include', 'paykka_custom_payment_template');
+// function paykka_custom_payment_template($template)
+// {
+//     if (is_page('paykka-payment')) {
+//         return plugin_dir_path(__FILE__) . 'templates/paykka-payment.php';
+//     }
+//     return $template;
+// }
+// add_filter('template_include', 'paykka_custom_payment_template');
 
-function paykka_paykka_card_encrypted() {
+function paykka_paykka_card_encrypted()
+{
     ob_start(); // 开启输出缓冲
     include plugin_dir_path(__FILE__) . 'templates/paykka-card-encrypted.php'; // 加载 PHP 模板
     return ob_get_clean(); // 获取缓冲区内容并返回
 }
 add_shortcode('paykka-card-encrypted', 'paykka_paykka_card_encrypted');
 
-function paykka_hide_page_title() {
+function paykka_paykka_embedded()
+{
+    ob_start(); // 开启输出缓冲
+    include plugin_dir_path(__FILE__) . 'templates/paykka-embedded.php'; // 加载 PHP 模板
+    return ob_get_clean(); // 获取缓冲区内容并返回
+}
+add_shortcode('paykka-embedded', 'paykka_paykka_embedded');
+
+
+function paykka_hide_page_title()
+{
     // 移除空白标题
     if (is_page('paykka-card-encrypted')) {
+        add_filter('the_title', '__return_empty_string'); // 隐藏标题
+    }
+    // 移除空白标题
+    if (is_page('paykka-embedded')) {
         add_filter('the_title', '__return_empty_string'); // 隐藏标题
     }
 }
