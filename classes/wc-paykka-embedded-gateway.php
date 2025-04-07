@@ -194,6 +194,8 @@ class Paykka_Embedded_Gateway extends WC_Payment_Gateway
         ob_start();
         // 真实代码
         $order = wc_get_order($order_id);
+        $order->update_status('pending', 'processing');
+
         // $order_data = json_encode($order->get_data(), JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
         // error_log("Order Data: \n" . $order_data);
 

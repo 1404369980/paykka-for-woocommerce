@@ -233,8 +233,6 @@ class Paykka_Drop_In_Gateway extends WC_Payment_Gateway
         $order = wc_get_order($order_id);
         $order->update_status('pending', '等待跳转到收银台');
 
-
-
         try {
             $this->handler_drop_in($order_id);
         } catch (Exception $e) {
