@@ -71,10 +71,10 @@ class Paykka_Drop_In_Gateway extends WC_Payment_Gateway
     {
 
         $params = $request->get_params();
-        error_log('$params: ' . print_r( $params, true));
+        error_log('$params: ' . print_r($params, true));
         // $this -> encrypted_card_info_data = $params['encrypted_card_data'];
         // wp_cache_set( 'encrypted_card_data', $params['encrypted_card_data'], 'user_meta', 0 );
-        error_log('is_user_logged_in' . is_user_logged_in() .' ==== '.get_current_user_id());
+        error_log('is_user_logged_in' . is_user_logged_in() . ' ==== ' . get_current_user_id());
 
         if (!is_user_logged_in()) {
             throw new Exception('please please log in first');
@@ -82,7 +82,7 @@ class Paykka_Drop_In_Gateway extends WC_Payment_Gateway
         $user_id = get_current_user_id();
         set_transient('encrypted_card_data' . $user_id, $params['encrypted_card_data'], 20);
 
-        error_log('encrypted_card_data' . print_r( get_transient('encrypted_card_data'), true));
+        error_log('encrypted_card_data' . print_r(get_transient('encrypted_card_data'), true));
         return new WP_REST_Response([
             'success' => true,
             'message' => '10086'
@@ -228,12 +228,21 @@ class Paykka_Drop_In_Gateway extends WC_Payment_Gateway
 
     public function process_payment($order_id)
     {
-        error_log('encrypted_card_data' . print_r( get_transient('encrypted_card_data'), true));
+        error_log('encrypted_card_data' . print_r(get_transient('encrypted_card_data'), true));
         ob_start();
         $order = wc_get_order($order_id);
         $order->update_status('pending', '等待跳转到收银台');
 
-        $this -> handler_drop_in($order_id);
+
+
+        try {
+            $this->handler_drop_in($order_id);
+        } catch (Exception $e) {
+            return [
+                'result' => 'failure',
+                'message' => $e->getMessage()
+            ];
+        }
 
         ob_end_clean();
         return ['result' => 'success', 'redirect' => $order->get_checkout_order_received_url()];
@@ -258,14 +267,19 @@ class Paykka_Drop_In_Gateway extends WC_Payment_Gateway
         error_log('$get_current_user_id: ' . $user_id);
 
 
-        $encrypted_card_data = get_transient('encrypted_card_data' . $user_id); 
+        $encrypted_card_data = get_transient('encrypted_card_data' . $user_id);
+        $card_encrypted_encode = json_encode($encrypted_card_data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
+        $encrypted_card_decode = json_decode($card_encrypted_encode, true);
+        if ( empty($encrypted_card_decode) || empty($encrypted_card_decode['encryptedCardNumber'])){
+            throw new Exception('Payment card processing failed');
+        }
 
         error_log('$encrypted_card_data1: ' . print_r($encrypted_card_data, true));
 
         $order = wc_get_order($order_id);
 
         $paykkaPaymentHelper = new PaykkaRequestHandler();
-        error_log("encrypted_card_data: \n". $encrypted_card_data);
+        error_log("encrypted_card_data: \n" . $encrypted_card_data);
         $response_data = $paykkaPaymentHelper->handlerCardPayment($order, $this->merchant_id, $this->private_key, $encrypted_card_data);
         error_log("payment_complete: \n");
         $order->payment_complete();
@@ -275,7 +289,7 @@ class Paykka_Drop_In_Gateway extends WC_Payment_Gateway
             throw new Exception('Invalid API response format');
         }
 
-        if ( !isset($response_data['ret_code']) || !$response_data['ret_code'] === '000000') {
+        if (!isset($response_data['ret_code']) || !$response_data['ret_code'] === '000000') {
             $error_message = isset($response_data['ret_msg']) ? sanitize_text_field($response_data['ret_msg']) : __('Payment processing failed', 'your-text-domain');
             error_log(sprintf(
                 '[Paykka Payment Error] Order %s - Code: %s, Message: %s',

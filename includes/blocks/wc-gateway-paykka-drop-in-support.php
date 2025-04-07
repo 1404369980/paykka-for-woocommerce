@@ -33,6 +33,20 @@ final class WC_Gateway_Paykka_Drop_In_Support extends AbstractPaymentMethodType
         return true;
     }
 
+    // public function get_payment_method_script_handles()
+    // {
+    //     $script_path = '/assets/js/blocks-drop-in.js';
+    //     $script_url = plugin_url_paykka() . $script_path;
+    //     wp_register_script(
+    //         'wc-paykka-drop-in-gateway-blocks', // 脚本句柄
+    //         $script_url, // 脚本路径
+    //         array('wc-blocks-registry', 'wc-settings', 'wp-element', 'wp-i18n'), // 依赖
+    //         '1.0.0', // 版本号
+    //         true // 是否在页脚加载
+    //     );
+    //     return array('wc-paykka-drop-in-gateway-blocks');
+    // }
+
     /**
      * 注册支付方法的脚本
      */
@@ -58,17 +72,17 @@ final class WC_Gateway_Paykka_Drop_In_Support extends AbstractPaymentMethodType
             $script_url, // 脚本路径
             array(
                 'paykka-sdk-js',
-                'react',
-                'react-dom',
+                // 'react',
+                // 'react-dom',
                 'wc-blocks-registry',
                 'wc-settings',
                 'wp-element',
-                'wp-i18n',
-                'wp-polyfill',
+                // 'wp-i18n',
+                // 'wp-polyfill',
                 'wp-element',
-                'wp-plugins',
+                // 'wp-plugins',
                 'wp-data',
-                'wc-checkout',
+                // 'wc-checkout',
                 'wp-api'
             ), // 依赖
             '1.0.0', // 版本号
@@ -76,19 +90,19 @@ final class WC_Gateway_Paykka_Drop_In_Support extends AbstractPaymentMethodType
         );
 
         // 本地化脚本，传递必要的设置
-        wp_localize_script('paykka-checkout', 'paykkaSettings', array(
-            'root' => esc_url_raw(rest_url()),
-            'nonce' => wp_create_nonce('wp_rest'),
-            'current_user_id' => get_current_user_id()
-        ));
+        // wp_localize_script('paykka-checkout', 'paykkaSettings', array(
+        //     'root' => esc_url_raw(rest_url()),
+        //     'nonce' => wp_create_nonce('wp_rest'),
+        //     'current_user_id' => get_current_user_id()
+        // ));
 
         // 添加 `type="module"`
-        add_filter('script_loader_tag', function ($tag, $handle) {
-            if ($handle === 'wc-paykka-drop-in-gateway-blocks') {
-                return str_replace('<script ', '<script type="module" ', $tag);
-            }
-            return $tag;
-        }, 10, 2);
+        // add_filter('script_loader_tag', function ($tag, $handle) {
+        //     if ($handle === 'wc-paykka-drop-in-gateway-blocks') {
+        //         return str_replace('<script ', '<script type="module" ', $tag);
+        //     }
+        //     return $tag;
+        // }, 10, 2);
 
         // wp_add_inline_script(
         //     'wc-paykka-drop-in-gateway-blocks',
@@ -97,7 +111,6 @@ final class WC_Gateway_Paykka_Drop_In_Support extends AbstractPaymentMethodType
         // );
 
         return array('wc-paykka-drop-in-gateway-blocks');
-
     }
     /**
      * 获取支付方法的数据

@@ -198,22 +198,22 @@ function paykka_hide_page_title()
 add_action('template_redirect', 'paykka_hide_page_title');
 
 
-add_action('wp_enqueue_scripts', function() {
-    // 强制在结账页预加载关键脚本
-    if (function_exists('is_checkout') && is_checkout()) {
-        $scripts = [
-            'wc-store',
-            'wc-checkout',
-            'wc-blocks-data'
-        ];
-        foreach ($scripts as $handle) {
-            if (!wp_script_is($handle, 'registered')) {
-                wp_register_script($handle, '', [], '', true);
-            }
-            wp_enqueue_script($handle);
-        }
-    }
-}, 5); // 优先级设为5确保最早加载
+// add_action('wp_enqueue_scripts', function() {
+//     // 强制在结账页预加载关键脚本
+//     if (function_exists('is_checkout') && is_checkout()) {
+//         $scripts = [
+//             'wc-store',
+//             'wc-checkout',
+//             'wc-blocks-data'
+//         ];
+//         foreach ($scripts as $handle) {
+//             if (!wp_script_is($handle, 'registered')) {
+//                 wp_register_script($handle, '', [], '', true);
+//             }
+//             wp_enqueue_script($handle);
+//         }
+//     }
+// }, 5); // 优先级设为5确保最早加载
 
 
 // add_action('rest_api_init', function () {

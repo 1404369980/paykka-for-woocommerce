@@ -31,12 +31,10 @@ const PayKKaEncryptedCard = window.PayKKaCardCheckoutEncryptedCard || window.Pay
 // const { createElement, useState, useEffect } = React;
 const { createElement, useState, useEffect } = window.wp.element;
 
-var { registerPlugin } = wp.plugins;
-var { ExperimentalOrderMeta } = wc.blocksCheckout;
-var { registerExpressPaymentMethod, registerPaymentMethod } = wc.wcBlocksRegistry;
+var { registerPaymentMethod } = wc.wcBlocksRegistry;
 // const { useDispatch } = wc.wcData;
-const { useDispatch, useSelect } = wp.data; // 现在可以正常解构
-const { useStoreCart } = wc.blocksCheckout;
+// const { useDispatch, useSelect } = wp.data; // 现在可以正常解构
+// const { useStoreCart } = wc.blocksCheckout;
 // const { useSelect, useDispatch } = wp.data;
 
 
@@ -106,7 +104,7 @@ PayKKaEncryptedCard.setEnv({
                 setEncryptedData(res);
                 console.log("调用支付接口，传输加密数据:", res);
 
-                fetch('http://10.199.101.49:8018/index.php?rest_route=/paykka/v1/drop-in/session', {
+                fetch('/index.php?rest_route=/paykka/v1/drop-in/session', {
                     // fetch('/wp-json/paykka/v1/encrypted_card', {
                     method: "POST",
                     headers: {
