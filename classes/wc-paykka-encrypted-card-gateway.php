@@ -21,11 +21,11 @@ class Paykka_Encrypted_Card_Gateway extends WC_Payment_Gateway
         $this->has_fields = false;
         // $this->version = '8.2.0';
         $this->icon = '';
-        $this->method_description = __('PayKKa Paykka_Encrypted_Card_Gateway Card payments.', 'paykka-for-woocommerce');
-        $this->method_title = __('PayKKa Paykka_Encrypted_Card_Gateway Card', 'paykka-for-woocommerce');
+        $this->method_description = __('PayKKa Paykka Encrypted Card Gateway Card payments.', 'paykka-for-woocommerce');
+        $this->method_title = __('PayKKa Paykka Encrypted Card Gateway Card', 'paykka-for-woocommerce');
 
-        $this->title = __('PayKKa Paykka_Encrypted_Card_Gateway Card', 'paykka-for-woocommerce');
-        $this->description = __('Use PayKKa Paykka_Encrypted_Card_Gateway Card to securely pay with your card.', 'paykka-for-woocommerce');
+        $this->title = __('PayKKa Paykka Encrypted Card Gateway Card', 'paykka-for-woocommerce');
+        $this->description = __('Use PayKKa Paykka Encrypted Card Gateway Card to securely pay with your card.', 'paykka-for-woocommerce');
 
         $this->supports = array(
             'products',
@@ -253,7 +253,7 @@ class Paykka_Encrypted_Card_Gateway extends WC_Payment_Gateway
                 'redirect_url' => $this->get_return_url($order)
             ]);
         } else {
-            $error_message = isset($response_data['ret_msg']) ?sanitize_text_field($response_data['ret_msg']) : __('Payment processing failed', 'your-text-domain');
+            $error_message = isset($response_data['ret_msg']) ? sanitize_text_field($response_data['ret_msg']) : __('Payment processing failed', 'your-text-domain');
 
             // 记录详细日志
             error_log(sprintf(

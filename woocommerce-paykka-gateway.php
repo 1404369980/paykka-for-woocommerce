@@ -50,6 +50,7 @@ function woocommerce_paykka_init()
         $methods[] = 'Paykka_Credit_Card_Gateway';
         $methods[] = 'Paykka_Embedded_Gateway';
         $methods[] = 'Paykka_Encrypted_Card_Gateway';
+        $methods[] = 'Paykka_Drop_In_Gateway';
         return $methods;
     }
     add_filter('woocommerce_payment_gateways', 'woocommerce_payfast_add_gateway');
@@ -73,8 +74,8 @@ function woocommerce_paykka_init()
     require_once plugin_basename('classes/wc-paykka-credit-card-gateway.php');
     require_once plugin_basename('classes/wc-paykka-embedded-gateway.php');
 
-    require_once plugin_basename('classes/wc-paykka-encrypted-card.php');
-    // new \Paykka_Encrypted_Card_Gateway();
+    require_once plugin_basename('classes/wc-paykka-encrypted-card-gateway.php');
+    require_once plugin_basename('classes/wc-paykka-drop-in-gateway.php');
 }
 
 
@@ -86,6 +87,7 @@ function paykka_gateway_block_support()
         require_once plugin_dir_path(__FILE__) . 'includes/blocks/wc-gateway-paykka-support.php';
         require_once plugin_dir_path(__FILE__) . 'includes/blocks/wc-gateway-paykka-embedded-support.php';
         require_once plugin_dir_path(__FILE__) . 'includes/blocks/wc-gateway-paykka-encrypted-card-support.php';
+        require_once plugin_dir_path(__FILE__) . 'includes/blocks/wc-gateway-paykka-drop-in-support.php';
 
         // 注册支付方法的区块支持
         add_action(
@@ -94,6 +96,7 @@ function paykka_gateway_block_support()
                 $payment_method_registry->register(new WC_Gateway_Paykka_Support());
                 $payment_method_registry->register(new WC_Gateway_Paykka_Embedded_Support());
                 $payment_method_registry->register(new WC_Gateway_Paykka_Encrypted_Card_Support());
+                $payment_method_registry->register(new WC_Gateway_Paykka_Drop_In_Support());
             }
         );
     }
@@ -119,9 +122,10 @@ function paykka_create_payment_page()
         $page_paykka_payment_id = wp_insert_post([
             'post_title' => 'Paykka Embedded',
             'post_content' => '[paykka-embedded]',
-            'post_status' => 'private',
+            'post_status' => 'publish',
             'post_type' => 'page',
             'post_name' => $page_slug,
+            'show_in_nav_menus' => false,
         ]);
         if ($page_paykka_payment_id) {
             update_post_meta($page_paykka_payment_id, '_wp_page_template', 'default'); // 使用默认模板
@@ -139,9 +143,10 @@ function paykka_create_payment_page()
         $page_card_encry_slug_id = wp_insert_post([
             'post_title' => 'Paykka Encrypted Card Payment',
             'post_content' => '[paykka-card-encrypted]',
-            'post_status' => 'private',
+            'post_status' => 'publish',
             'post_type' => 'page',
             'post_name' => $page_card_encry_slug,
+            'show_in_nav_menus' => false,
         ]);
         if ($page_card_encry_slug_id) {
             update_post_meta($page_card_encry_slug_id, '_wp_page_template', 'default'); // 使用默认模板
@@ -191,6 +196,24 @@ function paykka_hide_page_title()
     }
 }
 add_action('template_redirect', 'paykka_hide_page_title');
+
+
+add_action('wp_enqueue_scripts', function() {
+    // 强制在结账页预加载关键脚本
+    if (function_exists('is_checkout') && is_checkout()) {
+        $scripts = [
+            'wc-store',
+            'wc-checkout',
+            'wc-blocks-data'
+        ];
+        foreach ($scripts as $handle) {
+            if (!wp_script_is($handle, 'registered')) {
+                wp_register_script($handle, '', [], '', true);
+            }
+            wp_enqueue_script($handle);
+        }
+    }
+}, 5); // 优先级设为5确保最早加载
 
 
 // add_action('rest_api_init', function () {
