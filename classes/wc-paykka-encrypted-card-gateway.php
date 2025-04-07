@@ -242,11 +242,6 @@ class Paykka_Encrypted_Card_Gateway extends WC_Payment_Gateway
         error_log("payment_complete: \n");
         $order->payment_complete();
 
-
-        if (!is_array($response_data)) {
-            throw new Exception('Invalid API response format');
-        }
-
         if (isset($response_data['ret_code']) && $response_data['ret_code'] === '000000') {
             return new WP_REST_Response([
                 'success' => true,
@@ -254,14 +249,9 @@ class Paykka_Encrypted_Card_Gateway extends WC_Payment_Gateway
             ]);
         } else {
             $error_message = isset($response_data['ret_msg']) ? sanitize_text_field($response_data['ret_msg']) : __('Payment processing failed', 'your-text-domain');
-
+            
             // 记录详细日志
-            error_log(sprintf(
-                '[Paykka Payment Error] Order %s - Code: %s, Message: %s',
-                $order instanceof WC_Order ? $order->get_id() : 'N/A',
-                $error_code,
-                $error_message
-            ));
+            error_log('[Paykka Payment Error]:\n'. print_r( $response_data, true));
             return new WP_REST_Response([
                 'success' => false,
                 'message' => $error_message

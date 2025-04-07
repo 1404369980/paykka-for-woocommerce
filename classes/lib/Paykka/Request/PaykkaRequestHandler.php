@@ -94,6 +94,7 @@ class PaykkaRequestHandler
         // $response = wp_remote_post('https://sandbox.aq.paykka.com/apis/session', array(
             'headers' => $headers,
             'body' => $http_body,
+            'timeout' => 16,
         ));
 
         // error_log("response: \n", $http_body);
@@ -186,6 +187,7 @@ class PaykkaRequestHandler
         // $response = wp_remote_post('https://sandbox.aq.paykka.com/apis/session', array(
             'headers' => $headers,
             'body' => $http_body,
+            'timeout' => 16,
         ));
 
         // error_log("response: \n", $http_body);
