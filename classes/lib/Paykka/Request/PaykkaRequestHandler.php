@@ -27,14 +27,13 @@ class PaykkaRequestHandler
 
     public function buildSessionId($order, $PAYKKA_MERCHANT_ID, $PAYKKA_API_KEY)
     {
-        $response_data = $this->handlerSession($order, $PAYKKA_MERCHANT_ID, $PAYKKA_API_KEY);
-        return $response_data['data']['session_id'];
+        return $this->handlerSession($order, $PAYKKA_MERCHANT_ID, $PAYKKA_API_KEY);
+        // return $response_data['data']['session_id'];
     }
 
     public function buildSessionUrl($order, $PAYKKA_MERCHANT_ID, $PAYKKA_API_KEY)
     {
-        $response_data = $this->handlerSession($order, $PAYKKA_MERCHANT_ID, $PAYKKA_API_KEY);
-        return $response_data['data']['session_url'];
+        return $this->handlerSession($order, $PAYKKA_MERCHANT_ID, $PAYKKA_API_KEY);
     }
 
 

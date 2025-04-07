@@ -120,8 +120,8 @@ final class WC_Gateway_Paykka_Drop_In_Support extends AbstractPaymentMethodType
     public function get_payment_method_data()
     {
         return array(
-            'title' => $this->settings['title'] ?? __('PayKKa Drop In Gateway', 'paykka-for-woocommerce'),
-            'description' => $this->settings['description'] ?? __('Pay Drop In Gateway', 'paykka-for-woocommerce'),
+            'title' => $this->settings['title'] ?? __('PayKKa Drop In', 'paykka-for-woocommerce'),
+            'description' => $this->settings['description'] ?? __('Pay Drop In', 'paykka-for-woocommerce'),
             'supports' => array('products'), // 支持的支付功能
             'content' => null, // 必须明确返回null或React元素
         );

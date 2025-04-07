@@ -21,10 +21,10 @@ class Paykka_Encrypted_Card_Gateway extends WC_Payment_Gateway
         $this->has_fields = false;
         // $this->version = '8.2.0';
         $this->icon = '';
-        $this->method_description = __('PayKKa Paykka Encrypted Card Gateway Card payments.', 'paykka-for-woocommerce');
-        $this->method_title = __('PayKKa Paykka Encrypted Card Gateway Card', 'paykka-for-woocommerce');
+        $this->method_description = __('PayKKa Encrypted Card Gateway Card payments.', 'paykka-for-woocommerce');
+        $this->method_title = __('PayKKa Encrypted Card', 'paykka-for-woocommerce');
 
-        $this->title = __('PayKKa Paykka Encrypted Card Gateway Card', 'paykka-for-woocommerce');
+        $this->title = __('PayKKa Encrypted Card', 'paykka-for-woocommerce');
         $this->description = __('Use PayKKa Paykka Encrypted Card Gateway Card to securely pay with your card.', 'paykka-for-woocommerce');
 
         $this->supports = array(
@@ -69,14 +69,14 @@ class Paykka_Encrypted_Card_Gateway extends WC_Payment_Gateway
                 'title' => __('Title', 'paykka-for-woocommerce'),
                 'type' => 'text',
                 'description' => __('This controls the title which the user sees during checkout.', 'paykka-for-woocommerce'),
-                'default' => __('Credit Card', 'paykka-for-woocommerce'),
+                'default' => __('PayKKa Encrypted Card', 'paykka-for-woocommerce'),
                 'desc_tip' => true
             ),
             'description' => array(
                 'title' => __('Description', 'paykka-for-woocommerce'),
                 'type' => 'textarea',
                 'description' => __('This controls the description which the user sees during checkout.', 'paykka-for-woocommerce'),
-                'default' => __('Pay securely with your credit card.', 'paykka-for-woocommerce'),
+                'default' => __('Pay securely with your PayKKa Encrypted Card.', 'paykka-for-woocommerce'),
                 'desc_tip' => true
             ),
             'sandbox' => array(

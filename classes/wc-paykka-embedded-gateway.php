@@ -20,11 +20,11 @@ class Paykka_Embedded_Gateway extends WC_Payment_Gateway
         $this->has_fields = false;
         $this->version = '8.2.0';
         $this->icon = '';
-        $this->method_description = __('PayKKa Embedded Checkout payments.', 'paykka-for-woocommerce');
-        $this->method_title = __('PayKKa Embedded Checkout', 'paykka-for-woocommerce');
+        $this->method_description = __('PayKKa Component payments.', 'paykka-for-woocommerce');
+        $this->method_title = __('PayKKa Component', 'paykka-for-woocommerce');
 
-        $this->title = __('PayKKa Embedded Checkout', 'paykka-for-woocommerce');
-        $this->description = __('Use PayKKa Embedded Checkout to securely pay with your card.', 'paykka-for-woocommerce');
+        $this->title = __('PayKKa Component', 'paykka-for-woocommerce');
+        $this->description = __('Use PayKKa Component to securely pay', 'paykka-for-woocommerce');
 
         $this->supports = array(
             'products',
@@ -60,7 +60,7 @@ class Paykka_Embedded_Gateway extends WC_Payment_Gateway
         $this->form_fields = array(
             'enabled' => array(
                 'title' => __('Enable/Disable', 'paykka-for-woocommerce'),
-                'label' => __('Enable PayKKa Payment Gateway', 'paykka-for-woocommerce'),
+                'label' => __('Enable PayKKa Component Gateway', 'paykka-for-woocommerce'),
                 'type' => 'checkbox',
                 'description' => '',
                 'default' => 'no'
@@ -69,14 +69,14 @@ class Paykka_Embedded_Gateway extends WC_Payment_Gateway
                 'title' => __('Title', 'paykka-for-woocommerce'),
                 'type' => 'text',
                 'description' => __('This controls the title which the user sees during checkout.', 'paykka-for-woocommerce'),
-                'default' => __('Credit Card', 'paykka-for-woocommerce'),
+                'default' => __('PayKKa Component', 'paykka-for-woocommerce'),
                 'desc_tip' => true
             ),
             'description' => array(
                 'title' => __('Description', 'paykka-for-woocommerce'),
                 'type' => 'textarea',
                 'description' => __('This controls the description which the user sees during checkout.', 'paykka-for-woocommerce'),
-                'default' => __('Pay securely with your credit card.', 'paykka-for-woocommerce'),
+                'default' => __('Pay securely with PayKKa Component.', 'paykka-for-woocommerce'),
                 'desc_tip' => true
             ),
             'sandbox' => array(
@@ -222,7 +222,15 @@ class Paykka_Embedded_Gateway extends WC_Payment_Gateway
 
         $paykkaPaymentHelper = new PaykkaRequestHandler();
         error_log("PaykkaRequestHandler: \n");
-        $session_id = $paykkaPaymentHelper->buildSessionId($order, $this->merchant_id, $this->private_key);
+        $response_data = $paykkaPaymentHelper->buildSessionId($order, $this->merchant_id, $this->private_key);
+
+        if(empty($response_data) || $response_data['ret_code'] !== '000000'){
+            return [
+                'result' => 'failure',
+                'message' => $response_data['ret_msg']
+            ];
+        }
+        $session_id = $response_data['data']['session_id'];
 
         error_log("session_id:" . $session_id);
         error_log("paykka_client_key:" . $this->client_key);

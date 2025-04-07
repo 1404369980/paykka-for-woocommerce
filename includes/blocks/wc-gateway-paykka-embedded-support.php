@@ -59,8 +59,8 @@ final class WC_Gateway_Paykka_Embedded_Support extends AbstractPaymentMethodType
     public function get_payment_method_data()
     {
         return array(
-            'title' => $this->settings['title'] ?? __('PayKKa Embedded Gateway', 'paykka-for-woocommerce'),
-            'description' => $this->settings['description'] ?? __('Pay Embedded Checkout Gateway', 'paykka-for-woocommerce'),
+            'title' => $this->settings['title'] ?? __('PayKKa Component', 'paykka-for-woocommerce'),
+            'description' => $this->settings['description'] ?? __('PayKKa Component Gateway', 'paykka-for-woocommerce'),
             'supports' => array('products'), // 支持的支付功能
         );
     }

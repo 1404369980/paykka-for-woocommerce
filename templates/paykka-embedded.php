@@ -8,9 +8,6 @@ if (!defined('ABSPATH')) {
 <script type="text/javascript" src="https://checkout-fat.eu.paykka.com/cp/card-checkout-ui.js"></script>
 
 <div class="shop-content">
-    <!-- 主要支付内容 -->
-    <h2>Paykka 支付</h2>
-
     <!-- 这里插入支付组件 -->
     <div id="paykka_payform" style="display:flex;flex-direction: column;align-items: center;padding-bottom: 20px">
         <div id="checkoutApplePayField" style="width:500px;padding-bottom: 20px"></div>

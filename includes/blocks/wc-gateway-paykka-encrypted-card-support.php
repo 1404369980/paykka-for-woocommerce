@@ -58,8 +58,8 @@ final class WC_Gateway_Paykka_Encrypted_Card_Support extends AbstractPaymentMeth
     public function get_payment_method_data()
     {
         return array(
-            'title' => $this->settings['title'] ?? __('PayKKa Encrypted Card Gateway', 'paykka-for-woocommerce'),
-            'description' => $this->settings['description'] ?? __('Pay Encrypted Card Gateway', 'paykka-for-woocommerce'),
+            'title' => $this->settings['title'] ?? __('PayKKa Encrypted Card', 'paykka-for-woocommerce'),
+            'description' => $this->settings['description'] ?? __('Pay Encrypted Card', 'paykka-for-woocommerce'),
             'supports' => array('products'), // 支持的支付功能
         );
     }

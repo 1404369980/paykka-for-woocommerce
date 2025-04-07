@@ -19,11 +19,11 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
         $this->has_fields = false;
         $this->version = '8.2.0';
         $this->icon = '';
-        $this->method_description = __('Secure credit card payments via PayKKa.', 'paykka-for-woocommerce');
-        $this->method_title = __('PayKKa Credit Card', 'paykka-for-woocommerce');
+        $this->method_description = __('PayKKa Hosted Page payments.', 'paykka-for-woocommerce');
+        $this->method_title = __('PayKKa Hosted Page', 'paykka-for-woocommerce');
 
-        $this->title = __('PayKKa Payment', 'paykka-for-woocommerce');
-        $this->description = __('Use PayKKa to securely pay with your credit card.', 'paykka-for-woocommerce');
+        $this->title = __('PayKKa Hosted Page', 'paykka-for-woocommerce');
+        $this->description = __('PayKKa Hosted Page payments.', 'paykka-for-woocommerce');
 
         $this->supports = array(
             'products',
@@ -69,14 +69,14 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
                 'title' => __('Title', 'paykka-for-woocommerce'),
                 'type' => 'text',
                 'description' => __('This controls the title which the user sees during checkout.', 'paykka-for-woocommerce'),
-                'default' => __('Credit Card', 'paykka-for-woocommerce'),
+                'default' => __('PayKKa Hosted Page', 'paykka-for-woocommerce'),
                 'desc_tip' => true
             ),
             'description' => array(
                 'title' => __('Description', 'paykka-for-woocommerce'),
                 'type' => 'textarea',
                 'description' => __('This controls the description which the user sees during checkout.', 'paykka-for-woocommerce'),
-                'default' => __('Pay securely with your credit card.', 'paykka-for-woocommerce'),
+                'default' => __('PayKKa Hosted Page payments.', 'paykka-for-woocommerce'),
                 'desc_tip' => true
             ),
             'sandbox' => array(
@@ -215,17 +215,20 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
 
         $paykkaPaymentHelper = new PaykkaRequestHandler();
         error_log("PaykkaRequestHandler: \n");
-        $url_code = $paykkaPaymentHelper->buildSessionUrl($order, $this->merchant_id, $this->private_key);
-
+        $response_data = $paykkaPaymentHelper->buildSessionUrl($order, $this->merchant_id, $this->private_key);
         ob_end_clean();
-        // print "请求url" . $url_code . "";
 
-        // error_log("session url " . $url_code);
-
-        return array(
-            'result' => 'success',
-            'redirect' => $url_code,
-        );
+        if (isset($response_data['ret_code']) && $response_data['ret_code'] === '000000') {
+            return array(
+                'result' => 'success',
+                'redirect' => $response_data['data']['session_url'],
+            );
+        }else{
+            return [
+                'result' => 'failure',
+                'message' => $response_data['ret_msg']
+            ];
+        }
     }
 
     public function handle_payment_callback()

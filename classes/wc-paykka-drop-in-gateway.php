@@ -107,14 +107,14 @@ class Paykka_Drop_In_Gateway extends WC_Payment_Gateway
                 'title' => __('Title', 'paykka-for-woocommerce'),
                 'type' => 'text',
                 'description' => __('This controls the title which the user sees during checkout.', 'paykka-for-woocommerce'),
-                'default' => __('Credit Card', 'paykka-for-woocommerce'),
+                'default' => __('PayKKa Drop In Card', 'paykka-for-woocommerce'),
                 'desc_tip' => true
             ),
             'description' => array(
                 'title' => __('Description', 'paykka-for-woocommerce'),
                 'type' => 'textarea',
                 'description' => __('This controls the description which the user sees during checkout.', 'paykka-for-woocommerce'),
-                'default' => __('Pay securely with your credit card.', 'paykka-for-woocommerce'),
+                'default' => __('Pay securely with PayKKa Drop In Card payments', 'paykka-for-woocommerce'),
                 'desc_tip' => true
             ),
             'sandbox' => array(

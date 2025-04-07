@@ -59,8 +59,8 @@ final class WC_Gateway_Paykka_Support extends AbstractPaymentMethodType
     public function get_payment_method_data()
     {
         return array(
-            'title' => $this->settings['title'] ?? __('PayKKa Gateway', 'paykka-for-woocommerce'),
-            'description' => $this->settings['description'] ?? __('Pay via Custom Gateway', 'paykka-for-woocommerce'),
+            'title' => $this->settings['title'] ?? __('PayKKa Hosted Page', 'paykka-for-woocommerce'),
+            'description' => $this->settings['description'] ?? __('PayKKa Hosted Page payments.', 'paykka-for-woocommerce'),
             'supports' => array('products'), // 支持的支付功能
         );
     }
