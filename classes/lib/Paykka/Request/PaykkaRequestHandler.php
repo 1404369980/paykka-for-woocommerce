@@ -27,17 +27,17 @@ class PaykkaRequestHandler
 
     public function buildSessionId($order, $PAYKKA_MERCHANT_ID, $PAYKKA_API_KEY)
     {
-        return $this->handlerSession($order, $PAYKKA_MERCHANT_ID, $PAYKKA_API_KEY);
+        return $this->handlerSession($order, $PAYKKA_MERCHANT_ID, $PAYKKA_API_KEY, 'EMBEDDED');
         // return $response_data['data']['session_id'];
     }
 
     public function buildSessionUrl($order, $PAYKKA_MERCHANT_ID, $PAYKKA_API_KEY)
     {
-        return $this->handlerSession($order, $PAYKKA_MERCHANT_ID, $PAYKKA_API_KEY);
+        return $this->handlerSession($order, $PAYKKA_MERCHANT_ID, $PAYKKA_API_KEY, 'HOST');
     }
 
 
-    public function handlerSession($order, $PAYKKA_MERCHANT_ID, $PAYKKA_API_KEY)
+    public function handlerSession($order, $PAYKKA_MERCHANT_ID, $PAYKKA_API_KEY, $session_mode)
     {
 
         $now = new \DateTime('now', new \DateTimeZone('UTC'));
@@ -66,7 +66,7 @@ class PaykkaRequestHandler
         $paymentRequest->__set('notify_url', $notify_url);
         $paymentRequest->__set('return_url', $callback_url);
         $paymentRequest->__set('expire_time', $expire_time);
-        $paymentRequest->__set('session_mode', 'HOST');
+        $paymentRequest->__set('session_mode', $session_mode);
 
         $paymentRequest->bill = $this->buildBill($order);
         $paymentRequest->shipping = $this->buildShipping($order);
@@ -143,7 +143,7 @@ class PaykkaRequestHandler
         $paymentRequest->__set('notify_url', $notify_url);
         $paymentRequest->__set('return_url', $callback_url);
         $paymentRequest->__set('expire_time', $expire_time);
-        $paymentRequest->__set('session_mode', 'HOST');
+        // $paymentRequest->__set('session_mode', 'HOST');
 
         $paymentRequest->bill = $this->buildBill($order);
         $paymentRequest->shipping = $this->buildShipping($order);
