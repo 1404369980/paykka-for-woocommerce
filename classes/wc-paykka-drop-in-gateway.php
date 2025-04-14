@@ -268,7 +268,7 @@ class Paykka_Drop_In_Gateway extends WC_Payment_Gateway
         $encrypted_card_data = get_transient('encrypted_card_data' . $user_id);
         $card_encrypted_encode = json_encode($encrypted_card_data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
         $encrypted_card_decode = json_decode($card_encrypted_encode, true);
-        if ( empty($encrypted_card_decode) || empty($encrypted_card_decode['encryptedCardNumber'])){
+        if (empty($encrypted_card_decode) || empty($encrypted_card_decode['encryptedCardNumber'])) {
             throw new Exception('Payment card processing failed');
         }
 

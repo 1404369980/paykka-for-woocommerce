@@ -45,15 +45,16 @@ function woocommerce_paykka_init()
      *
      * @param array $methods all WooCommerce methods.
      */
-    function woocommerce_payfast_add_gateway($methods)
+    function woocommerce_paykka_add_gateway($methods)
     {
         $methods[] = 'Paykka_Credit_Card_Gateway';
         $methods[] = 'Paykka_Embedded_Gateway';
         $methods[] = 'Paykka_Encrypted_Card_Gateway';
         $methods[] = 'Paykka_Drop_In_Gateway';
+        $methods[] = 'Paykka_Google_Pay_Gateway';
         return $methods;
     }
-    add_filter('woocommerce_payment_gateways', 'woocommerce_payfast_add_gateway');
+    add_filter('woocommerce_payment_gateways', 'woocommerce_paykka_add_gateway');
 
 
     function plugin_abspath_paykka()
@@ -76,6 +77,7 @@ function woocommerce_paykka_init()
 
     require_once plugin_basename('classes/wc-paykka-encrypted-card-gateway.php');
     require_once plugin_basename('classes/wc-paykka-drop-in-gateway.php');
+    require_once plugin_basename('classes/wc-paykka-google-pay-gateway.php');
 }
 
 
@@ -88,7 +90,7 @@ function paykka_gateway_block_support()
         require_once plugin_dir_path(__FILE__) . 'includes/blocks/wc-gateway-paykka-embedded-support.php';
         require_once plugin_dir_path(__FILE__) . 'includes/blocks/wc-gateway-paykka-encrypted-card-support.php';
         require_once plugin_dir_path(__FILE__) . 'includes/blocks/wc-gateway-paykka-drop-in-support.php';
-
+        require_once plugin_dir_path(__FILE__) . 'includes/blocks/wc-gateway-paykka-google-pay-support.php';
         // 注册支付方法的区块支持
         add_action(
             'woocommerce_blocks_payment_method_type_registration',
@@ -97,6 +99,7 @@ function paykka_gateway_block_support()
                 $payment_method_registry->register(new WC_Gateway_Paykka_Embedded_Support());
                 $payment_method_registry->register(new WC_Gateway_Paykka_Encrypted_Card_Support());
                 $payment_method_registry->register(new WC_Gateway_Paykka_Drop_In_Support());
+                $payment_method_registry->register(new WC_Gateway_Paykka_Google_Pay_Support());
             }
         );
     }

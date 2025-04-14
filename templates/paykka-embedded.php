@@ -34,9 +34,9 @@ if (!defined('ABSPATH')) {
 
         // Initialize and create CheckoutCard instance
 
-        console.log("PaykkaCardCheckoutUI", PaykkaCardCheckoutUI);
+        console.log("PayKKaCardCheckoutUI", PayKKaCardCheckoutUI);
 
-        const { Card, ApplePay, GooglePay, setFraudDetectionEnv, PayKKaCheckout, setApiUrl, setCDNUrl } = PaykkaCardCheckoutUI;
+        const { Card, ApplePay, GooglePay, setFraudDetectionEnv, PayKKaCheckout, setApiUrl, setCDNUrl } = PayKKaCardCheckoutUI;
 
         setApiUrl('https://checkout-fat.eu.paykka.com')
         setCDNUrl('https://checkout-fat.eu.paykka.com/cp')

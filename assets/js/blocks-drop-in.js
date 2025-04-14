@@ -30,8 +30,10 @@ body.appendChild(link)
 const PayKKaEncryptedCard = window.PayKKaCardCheckoutEncryptedCard || window.PaykkaCardCheckoutEncryptedCard;
 // const { createElement, useState, useEffect } = React;
 const { createElement, useState, useEffect } = window.wp.element;
+const { getPaymentMethodDataRegistry } = window.wc.blocksCheckout;
 
-var { registerPaymentMethod } = wc.wcBlocksRegistry;
+
+var { registerPaymentMethod, registry } = wc.wcBlocksRegistry;
 // const { useDispatch } = wc.wcData;
 // const { useDispatch, useSelect } = wp.data; // 现在可以正常解构
 // const { useStoreCart } = wc.blocksCheckout;
@@ -46,31 +48,42 @@ PayKKaEncryptedCard.setEnv({
 
 (() => {
     "use strict";
+    const {promise, resolve} = createDeferred()
+    
+    function createDeferred() {
+        let resolve, reject;
+        const promise = new Promise((res, rej) => {
+          resolve = res;
+          reject = rej;
+        });
+        return { promise, resolve, reject };
+    }
+
     // 支付表单组件
     const PaymentForm = (props) => {
-        const [encryptedData, setEncryptedData] = useState(null);
+        var encryptedData = null;
         const [error, setError] = useState('');
 
-        const { eventRegistration} = props;
+        const { eventRegistration, emitResponse } = props;
+        const { onPaymentProcessing } = eventRegistration;
         // const { extensionData, setExtensionData } = useCheckoutSubmit();
 
 
-
         useEffect(() => {
-            const unsubscribe = eventRegistration.onPaymentSetup(() => {
+            const unsubscribe = eventRegistration.onPaymentProcessing(async() => {
                 console.log("知乎")
                 EncryptedCard.encrypt();
-                // 发送 AJAX 请求
+                encryptedData = res;
+                console.log('加密完成')
                 return {
-                    type: 'PAYMENT_METHOD_SETUP',
-                    meta: {
-                        payment_method: 'paykka-drop-in',
-                        // encrypted_data: 'encryptedData',
-                        // card_last4: '42424111111111'
-                        // ,user_id: get_current_user_id()
-                        // 其他支付网关需要的元数据
-                    }
-                };
+					type: emitResponse.responseTypes.SUCCESS,   
+					meta: {
+						paymentMethodData: {
+							'encrypted_card_data' : JSON.stringify(encryptedData),
+                            'xxxxx':'xxxxxxx'
+						},
+					},
+				};
 
             });
             return () => unsubscribe();
@@ -101,7 +114,10 @@ PayKKaEncryptedCard.setEnv({
                 }
             },
             onCardEncrypted: (res) => {
-                setEncryptedData(res);
+                // setEncryptedData(res);
+                
+                console.log('res', res)
+                // resolve()
                 console.log("调用支付接口，传输加密数据:", res);
 
                 fetch('/index.php?rest_route=/paykka/v1/drop-in/session', {

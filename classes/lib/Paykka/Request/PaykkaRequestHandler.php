@@ -206,6 +206,90 @@ class PaykkaRequestHandler
         return $response_data;
     }
 
+
+    public function handlerGooglePayPayment($order, $PAYKKA_MERCHANT_ID, $PAYKKA_API_KEY, $google_token)
+    {
+
+        $now = new \DateTime('now', new \DateTimeZone('UTC'));
+        // 转换为香港时间
+        $now->setTimezone(new \DateTimeZone('Asia/Hong_Kong'));
+        // 使用 DateInterval 对象来添加 5 分钟
+        $now->add(new \DateInterval('PT5M'));
+        $expire_time = $now->format('Y-m-d H:i:s');
+        $timestamp = round(microtime(true) * 1000);
+
+        $callback_url = PaykkaCallBackHandler::getCallbackUrl($order->get_id());
+        $notify_url = PaykkaWebHookHandler::getWebHookUrl();
+
+        // 币种金额
+        $decimal_places = get_option('woocommerce_price_num_decimals', 2);
+        $order_amount = intval(round($order->get_total() * pow(10, $decimal_places)));
+
+        $paymentRequest = new PaymentRequest();
+        $paymentRequest->version = 'v1.0';
+        $paymentRequest->__set('merchant_id', $PAYKKA_MERCHANT_ID);
+        $paymentRequest->__set('payment_type', 'PURCHASE');
+        $paymentRequest->__set('trans_id', $order->get_id());
+        $paymentRequest->__set('timestamp', $timestamp);
+        $paymentRequest->__set('currency', $order->get_currency());
+        $paymentRequest->__set('amount', $order_amount);
+        $paymentRequest->__set('notify_url', $notify_url);
+        $paymentRequest->__set('return_url', $callback_url);
+        $paymentRequest->__set('expire_time', $expire_time);
+        // $paymentRequest->__set('session_mode', 'HOST');
+
+        $paymentRequest->bill = $this->buildBill($order);
+        $paymentRequest->shipping = $this->buildShipping($order);
+        $paymentRequest->goods = $this->buildGoodsItems($order);
+        $paymentRequest->customer = $this->buildCustomer($order);
+        $paymentRequest->browser = new Browser();
+
+        $payment = new PaymentInfo();
+        $payment -> payment_method = 'GOOGLE_PAY';
+        $payment -> token_data = $google_token;
+
+        $paymentRequest->payment = $payment ;
+
+        $http_body = $paymentRequest->toJson();
+        error_log(message: "http_body: \n" . $http_body);
+
+        //sign
+        $signStr = $this->paykkaSign($PAYKKA_MERCHANT_ID, $timestamp, $http_body, $PAYKKA_API_KEY);
+
+        error_log("signStr: \n" . $signStr);
+        // 定义请求头
+        $headers = array(
+            'Content-Type' => 'application/json', // 设置内容类型为 JSON
+            'signature' => $signStr,
+            'type' => 'RSA256' // 添加认证头
+        );
+
+        $response = wp_remote_post('https://pub-fat.eu.paykka.com/apis/payments', array(
+        // $response = wp_remote_post('http://localhost:8080/apis/session', array(
+        // $response = wp_remote_post('https://sandbox.aq.paykka.com/apis/session', array(
+            'headers' => $headers,
+            'body' => $http_body,
+            'timeout' => 16,
+        ));
+
+        // error_log("response: \n", $http_body);
+
+        // 检查请求是否出错
+        if (is_wp_error($response)) {
+            wc_add_notice('Payment error: ' . $response->get_error_message(), 'error');
+            return;
+        }
+
+        $response_body = wp_remote_retrieve_body($response);
+        $response_data = json_decode($response_body, true);
+
+        error_log("response_body: \n" . $response_body);
+
+        // echo '<script>console.log("回调准备' . $data . '")</script>';
+        return $response_data;
+    }
+
+
     private function buildBill($order)
     {
         $bill = new Bill();

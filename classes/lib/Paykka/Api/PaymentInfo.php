@@ -5,6 +5,8 @@ class PaymentInfo {
 
     public $payment_method;
 
+    public $token_data;
+
     public $encrypted_card_no;
 
     public $encrypted_exp_year;
