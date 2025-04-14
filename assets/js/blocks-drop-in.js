@@ -48,16 +48,6 @@ PayKKaEncryptedCard.setEnv({
 
 (() => {
     "use strict";
-    const {promise, resolve} = createDeferred()
-    
-    function createDeferred() {
-        let resolve, reject;
-        const promise = new Promise((res, rej) => {
-          resolve = res;
-          reject = rej;
-        });
-        return { promise, resolve, reject };
-    }
 
     // 支付表单组件
     const PaymentForm = (props) => {
@@ -73,7 +63,6 @@ PayKKaEncryptedCard.setEnv({
             const unsubscribe = eventRegistration.onPaymentProcessing(async() => {
                 console.log("知乎")
                 EncryptedCard.encrypt();
-                encryptedData = res;
                 console.log('加密完成')
                 return {
 					type: emitResponse.responseTypes.SUCCESS,   

@@ -67,23 +67,11 @@ final class WC_Gateway_Paykka_Drop_In_Support extends AbstractPaymentMethodType
         wp_enqueue_script('paykka-sdk-js');
 
 
-        // wp_register_script(
-        //     'paykka-google-js',
-        //     'https://pay.google.com/gp/p/js/pay.js',
-        //     [],
-        //     null,
-        //     [
-        //         'strategy' => 'async'
-        //     ]
-        // );
-
-
         wp_register_script(
             'wc-paykka-drop-in-gateway-blocks', // 脚本句柄
             $script_url, // 脚本路径
             array(
                 'paykka-sdk-js',
-                // 'paykka-google-js',
                 // 'react',
                 // 'react-dom',
                 'wc-blocks-registry',
@@ -100,13 +88,6 @@ final class WC_Gateway_Paykka_Drop_In_Support extends AbstractPaymentMethodType
             '1.0.0', // 版本号
             true // 是否在页脚加载
         );
-
-        // wp_localize_script('wc-paykka-drop-in-gateway-blocks', 'PayKKaData', [
-        //     'ajax_url'   => admin_url('admin-ajax.php'),
-        //     'merchantId' => 'your_merchant_id',
-        //     'currency'   => get_woocommerce_currency(),
-        //     'total'      => WC()->cart->get_total('edit')
-        // ]);
 
         // 本地化脚本，传递必要的设置
         // wp_localize_script('paykka-checkout', 'paykkaSettings', array(
