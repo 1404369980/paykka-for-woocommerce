@@ -56,92 +56,6 @@ class Paykka_Encrypted_Card_Gateway extends WC_Payment_Gateway
 
     public function init_form_fields()
     {
-
-        $this->form_fields = array(
-            'enabled' => array(
-                'title' => __('Enable/Disable', 'paykka-for-woocommerce'),
-                'label' => __('Enable PayKKa Payment Gateway', 'paykka-for-woocommerce'),
-                'type' => 'checkbox',
-                'description' => '',
-                'default' => 'no'
-            ),
-            'title' => array(
-                'title' => __('Title', 'paykka-for-woocommerce'),
-                'type' => 'text',
-                'description' => __('This controls the title which the user sees during checkout.', 'paykka-for-woocommerce'),
-                'default' => __('PayKKa Encrypted Card', 'paykka-for-woocommerce'),
-                'desc_tip' => true
-            ),
-            'description' => array(
-                'title' => __('Description', 'paykka-for-woocommerce'),
-                'type' => 'textarea',
-                'description' => __('This controls the description which the user sees during checkout.', 'paykka-for-woocommerce'),
-                'default' => __('Pay securely with your PayKKa Encrypted Card.', 'paykka-for-woocommerce'),
-                'desc_tip' => true
-            ),
-            'sandbox' => array(
-                'title' => __('Sandbox', 'paykka-for-woocommerce'),
-                'label' => __('Enable Sandbox Mode', 'paykka-for-woocommerce'),
-                'type' => 'checkbox',
-                'description' => __('Place the payment gateway in sandbox mode using sandbox API keys (real payments will not be taken).', 'paykka-for-woocommerce'),
-                'default' => 'yes'
-            ),
-            'sandbox_public_key' => array(
-                'title' => __('Sandbox Public Key', 'paykka-for-woocommerce'),
-                'type' => 'textarea',
-                'description' => __('Get your API keys from your PayKKa account.', 'paykka-for-woocommerce'),
-                'default' => '',
-                'desc_tip' => true,
-                'custom_attributes' => array('autocomplete' => 'new-password'),
-            ),
-            'sandbox_private_key' => array(
-                'title' => __('Sandbox Private Key', 'paykka-for-woocommerce'),
-                'type' => 'textarea',
-                'description' => __('Get your API keys from your PayKKa account.', 'paykka-for-woocommerce'),
-                'default' => '',
-                'desc_tip' => true,
-                'custom_attributes' => array('autocomplete' => 'new-password'),
-            ),
-            'sandbox_merchant_id' => array(
-                'title' => __('Sandbox Merchant ID', 'paykka-for-woocommerce'),
-                'type' => 'textarea',
-                'description' => __('Get your API keys from your PayKKa account.', 'paykka-for-woocommerce'),
-                'default' => '',
-                'desc_tip' => true,
-                'custom_attributes' => array('autocomplete' => 'new-password'),
-            ),
-            'public_key' => array(
-                'title' => __('Live Public Key', 'paykka-for-woocommerce'),
-                'type' => 'textarea',
-                'description' => __('Get your API keys from your PayKKa account.', 'paykka-for-woocommerce'),
-                'default' => '',
-                'desc_tip' => true,
-                'custom_attributes' => array('autocomplete' => 'new-password'),
-            ),
-            'private_key' => array(
-                'title' => __('Live Private Key', 'paykka-for-woocommerce'),
-                'type' => 'textarea',
-                'description' => __('Get your API keys from your PayKKa account.', 'paykka-for-woocommerce'),
-                'default' => '',
-                'desc_tip' => true,
-                'custom_attributes' => array('autocomplete' => 'new-password'),
-            ),
-            'merchant_id' => array(
-                'title' => __('Live Merchant ID', 'paykka-for-woocommerce'),
-                'type' => 'textarea',
-                'description' => __('Get your API keys from your PayKKa account.', 'paykka-for-woocommerce'),
-                'default' => '',
-                'desc_tip' => true
-            ),
-            'client_key' => array(
-                'title' => __('Client Key', 'paykka-for-woocommerce'),
-                'type' => 'textarea',
-                'description' => __('Get your API keys from your PayKKa account.', 'paykka-for-woocommerce'),
-                'default' => '',
-                'desc_tip' => true
-            ),
-
-        );
     }
 
     public function process_admin_options()
@@ -238,7 +152,7 @@ class Paykka_Encrypted_Card_Gateway extends WC_Payment_Gateway
 
         $paykkaPaymentHelper = new PaykkaRequestHandler();
         error_log("PaykkaRequestHandler: \n");
-        $response_data = $paykkaPaymentHelper->handlerCardPayment($order, $this->merchant_id, $this->private_key, $encrypted_card_data);
+        $response_data = $paykkaPaymentHelper->handlerCardPayment($order, $encrypted_card_data);
         error_log("payment_complete: \n");
         $order->payment_complete();
 

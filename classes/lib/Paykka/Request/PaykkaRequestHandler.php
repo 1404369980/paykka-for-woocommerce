@@ -25,20 +25,23 @@ require_once FENGQIAO_PAYKKA_URL . '/classes/lib/Paykka/Request/PaykkaCallBackHa
 class PaykkaRequestHandler
 {
 
-    public function buildSessionId($order, $PAYKKA_MERCHANT_ID, $PAYKKA_API_KEY)
+    public function buildSessionId($order)
     {
-        return $this->handlerSession($order, $PAYKKA_MERCHANT_ID, $PAYKKA_API_KEY, 'EMBEDDED');
+        return $this->handlerSession($order, 'EMBEDDED');
         // return $response_data['data']['session_id'];
     }
 
-    public function buildSessionUrl($order, $PAYKKA_MERCHANT_ID, $PAYKKA_API_KEY)
+    public function buildSessionUrl($order)
     {
-        return $this->handlerSession($order, $PAYKKA_MERCHANT_ID, $PAYKKA_API_KEY, 'HOST');
+        return $this->handlerSession($order, 'HOST');
     }
 
 
-    public function handlerSession($order, $PAYKKA_MERCHANT_ID, $PAYKKA_API_KEY, $session_mode)
+    public function handlerSession($order, $session_mode)
     {
+        $paykkaSettings = getPaykkaSettings();
+        $PAYKKA_MERCHANT_ID = $paykkaSettings['paykka_merchant_id'];
+        $PAYKKA_API_KEY = $paykkaSettings['paykka_private_key'];
 
         $now = new \DateTime('now', new \DateTimeZone('UTC'));
         // 转换为香港时间
@@ -114,8 +117,11 @@ class PaykkaRequestHandler
     }
 
 
-    public function handlerCardPayment($order, $PAYKKA_MERCHANT_ID, $PAYKKA_API_KEY, $card_encrypted_data)
+    public function handlerCardPayment($order, $card_encrypted_data)
     {
+        $paykkaSettings = getPaykkaSettings();
+        $PAYKKA_MERCHANT_ID = $paykkaSettings['paykka_merchant_id'];
+        $PAYKKA_API_KEY = $paykkaSettings['paykka_private_key'];
 
         $now = new \DateTime('now', new \DateTimeZone('UTC'));
         // 转换为香港时间
@@ -207,8 +213,12 @@ class PaykkaRequestHandler
     }
 
 
-    public function handlerGooglePayPayment($order, $PAYKKA_MERCHANT_ID, $PAYKKA_API_KEY, $google_token)
+    public function handlerGooglePayPayment($order, $google_token)
     {
+
+        $paykkaSettings = getPaykkaSettings();
+        $PAYKKA_MERCHANT_ID = $paykkaSettings['paykka_merchant_id'];
+        $PAYKKA_API_KEY = $paykkaSettings['paykka_private_key'];
 
         $now = new \DateTime('now', new \DateTimeZone('UTC'));
         // 转换为香港时间

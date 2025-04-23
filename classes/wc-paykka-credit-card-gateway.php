@@ -57,88 +57,226 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
     public function init_form_fields()
     {
 
-        $this->form_fields = array(
-            'enabled' => array(
-                'title' => __('Enable/Disable', 'paykka-for-woocommerce'),
-                'label' => __('Enable PayKKa Payment Gateway', 'paykka-for-woocommerce'),
-                'type' => 'checkbox',
-                'description' => '',
-                'default' => 'no'
-            ),
-            'title' => array(
-                'title' => __('Title', 'paykka-for-woocommerce'),
-                'type' => 'text',
-                'description' => __('This controls the title which the user sees during checkout.', 'paykka-for-woocommerce'),
-                'default' => __('PayKKa Hosted Page', 'paykka-for-woocommerce'),
-                'desc_tip' => true
-            ),
-            'description' => array(
-                'title' => __('Description', 'paykka-for-woocommerce'),
-                'type' => 'textarea',
-                'description' => __('This controls the description which the user sees during checkout.', 'paykka-for-woocommerce'),
-                'default' => __('PayKKa Hosted Page payments.', 'paykka-for-woocommerce'),
-                'desc_tip' => true
-            ),
-            'sandbox' => array(
-                'title' => __('Sandbox', 'paykka-for-woocommerce'),
-                'label' => __('Enable Sandbox Mode', 'paykka-for-woocommerce'),
-                'type' => 'checkbox',
-                'description' => __('Place the payment gateway in sandbox mode using sandbox API keys (real payments will not be taken).', 'paykka-for-woocommerce'),
-                'default' => 'yes'
-            ),
-            'sandbox_public_key' => array(
-                'title' => __('Sandbox Public Key', 'paykka-for-woocommerce'),
-                'type' => 'textarea',
-                'description' => __('Get your API keys from your PayKKa account.', 'paykka-for-woocommerce'),
-                'default' => '',
-                'desc_tip' => true,
-                'custom_attributes' => array('autocomplete' => 'new-password'),
-            ),
-            'sandbox_private_key' => array(
-                'title' => __('Sandbox Private Key', 'paykka-for-woocommerce'),
-                'type' => 'textarea',
-                'description' => __('Get your API keys from your PayKKa account.', 'paykka-for-woocommerce'),
-                'default' => '',
-                'desc_tip' => true,
-                'custom_attributes' => array('autocomplete' => 'new-password'),
-            ),
-            'sandbox_merchant_id' => array(
-                'title' => __('Sandbox Merchant ID', 'paykka-for-woocommerce'),
-                'type' => 'textarea',
-                'description' => __('Get your API keys from your PayKKa account.', 'paykka-for-woocommerce'),
-                'default' => '',
-                'desc_tip' => true,
-                'custom_attributes' => array('autocomplete' => 'new-password'),
-            ),
-            'public_key' => array(
-                'title' => __('Live Public Key', 'paykka-for-woocommerce'),
-                'type' => 'textarea',
-                'description' => __('Get your API keys from your PayKKa account.', 'paykka-for-woocommerce'),
-                'default' => '',
-                'desc_tip' => true,
-                'custom_attributes' => array('autocomplete' => 'new-password'),
-            ),
-            'private_key' => array(
-                'title' => __('Live Private Key', 'paykka-for-woocommerce'),
-                'type' => 'textarea',
-                'description' => __('Get your API keys from your PayKKa account.', 'paykka-for-woocommerce'),
-                'default' => '',
-                'desc_tip' => true,
-                'custom_attributes' => array('autocomplete' => 'new-password'),
-            ),
-            'merchant_id' => array(
-                'title' => __('Live Merchant ID', 'paykka-for-woocommerce'),
-                'type' => 'textarea',
-                'description' => __('Get your API keys from your PayKKa account.', 'paykka-for-woocommerce'),
-                'default' => '',
-                'desc_tip' => true
-            ),
-        );
+        // $this->form_fields = array(
+        //     'enabled' => array(
+        //         'title' => __('Enable/Disable', 'paykka-for-woocommerce'),
+        //         'label' => __('Enable PayKKa Payment Gateway', 'paykka-for-woocommerce'),
+        //         'type' => 'checkbox',
+        //         'description' => '',
+        //         'default' => 'no'
+        //     ),
+        //     'title' => array(
+        //         'title' => __('Title', 'paykka-for-woocommerce'),
+        //         'type' => 'text',
+        //         'description' => __('This controls the title which the user sees during checkout.', 'paykka-for-woocommerce'),
+        //         'default' => __('PayKKa Hosted Page', 'paykka-for-woocommerce'),
+        //         'desc_tip' => true
+        //     ),
+        //     'description' => array(
+        //         'title' => __('Description', 'paykka-for-woocommerce'),
+        //         'type' => 'textarea',
+        //         'description' => __('This controls the description which the user sees during checkout.', 'paykka-for-woocommerce'),
+        //         'default' => __('PayKKa Hosted Page payments.', 'paykka-for-woocommerce'),
+        //         'desc_tip' => true
+        //     ),
+        //     'sandbox' => array(
+        //         'title' => __('Sandbox', 'paykka-for-woocommerce'),
+        //         'label' => __('Enable Sandbox Mode', 'paykka-for-woocommerce'),
+        //         'type' => 'checkbox',
+        //         'description' => __('Place the payment gateway in sandbox mode using sandbox API keys (real payments will not be taken).', 'paykka-for-woocommerce'),
+        //         'default' => 'yes'
+        //     ),
+        //     'sandbox_public_key' => array(
+        //         'title' => __('Sandbox Public Key', 'paykka-for-woocommerce'),
+        //         'type' => 'textarea',
+        //         'description' => __('Get your API keys from your PayKKa account.', 'paykka-for-woocommerce'),
+        //         'default' => '',
+        //         'desc_tip' => true,
+        //         'custom_attributes' => array('autocomplete' => 'new-password'),
+        //     ),
+        //     'sandbox_private_key' => array(
+        //         'title' => __('Sandbox Private Key', 'paykka-for-woocommerce'),
+        //         'type' => 'textarea',
+        //         'description' => __('Get your API keys from your PayKKa account.', 'paykka-for-woocommerce'),
+        //         'default' => '',
+        //         'desc_tip' => true,
+        //         'custom_attributes' => array('autocomplete' => 'new-password'),
+        //     ),
+        //     'sandbox_merchant_id' => array(
+        //         'title' => __('Sandbox Merchant ID', 'paykka-for-woocommerce'),
+        //         'type' => 'textarea',
+        //         'description' => __('Get your API keys from your PayKKa account.', 'paykka-for-woocommerce'),
+        //         'default' => '',
+        //         'desc_tip' => true,
+        //         'custom_attributes' => array('autocomplete' => 'new-password'),
+        //     ),
+        //     'public_key' => array(
+        //         'title' => __('Live Public Key', 'paykka-for-woocommerce'),
+        //         'type' => 'textarea',
+        //         'description' => __('Get your API keys from your PayKKa account.', 'paykka-for-woocommerce'),
+        //         'default' => '',
+        //         'desc_tip' => true,
+        //         'custom_attributes' => array('autocomplete' => 'new-password'),
+        //     ),
+        //     'private_key' => array(
+        //         'title' => __('Live Private Key', 'paykka-for-woocommerce'),
+        //         'type' => 'textarea',
+        //         'description' => __('Get your API keys from your PayKKa account.', 'paykka-for-woocommerce'),
+        //         'default' => '',
+        //         'desc_tip' => true,
+        //         'custom_attributes' => array('autocomplete' => 'new-password'),
+        //     ),
+        //     'merchant_id' => array(
+        //         'title' => __('Live Merchant ID', 'paykka-for-woocommerce'),
+        //         'type' => 'textarea',
+        //         'description' => __('Get your API keys from your PayKKa account.', 'paykka-for-woocommerce'),
+        //         'default' => '',
+        //         'desc_tip' => true
+        //     ),
+        // );
     }
 
+
+    // 🔥 核心：重写后台设置页 UI
+    public function admin_options()
+    {
+        $current_tab = isset($_GET['section']) ? sanitize_text_field($_GET['section']) : 'connection';
+
+        echo '<h2>' . esc_html($this->get_method_title()) . '</h2>';
+        echo '<nav class="nav-tab-wrapper">';
+
+        $tabs = [
+            'connection' => '连接设置',
+            'standard' => '标准支付',
+            'advanced' => '高级设置',
+        ];
+
+        foreach ($tabs as $key => $label) {
+            $class = ($current_tab === $key) ? 'nav-tab nav-tab-active' : 'nav-tab';
+            $url = admin_url('admin.php?page=wc-settings&tab=checkout&section=paykka&subtab=' . $key);
+            echo '<a href="' . esc_url($url) . '" class="' . esc_attr($class) . '">' . esc_html($label) . '</a>';
+        }
+
+        echo '</nav>';
+
+        // 加载设置表单字段
+        $subtab = isset($_GET['subtab']) ? sanitize_text_field($_GET['subtab']) : 'connection';
+        $settings = $this->get_settings_fields($subtab);
+        WC_Admin_Settings::output_fields($settings);
+    }
+
+    // 保存设置
     public function process_admin_options()
     {
-        parent::process_admin_options();
+        $subtab = isset($_GET['subtab']) ? sanitize_text_field($_GET['subtab']) : 'connection';
+        $settings = $this->get_settings_fields($subtab);
+        WC_Admin_Settings::save_fields($settings);
+    }
+
+
+    // 多个页面的字段
+    protected function get_settings_fields($tab)
+    {
+        switch ($tab) {
+            case 'standard':
+                return [
+                    [
+                        'title' => '连接设置',
+                        'type' => 'title',
+                        'id' => 'paykka_conn_title'
+                    ],
+                    [
+                        'title' => 'Sandbox',
+                        'type' => 'checkbox',
+                        'id' => 'paykka_sandbox_flag'
+                    ],
+                    [
+                        'title' => 'Sandbox Public Key',
+                        'type' => 'text',
+                        'id' => 'paykka_sandbox_public_key'
+                    ],
+                    [
+                        'title' => 'Sandbox Private Key',
+                        'type' => 'textarea',
+                        'id' => 'paykka_sandbox_private_key'
+                    ],
+                    [
+                        'title' => 'Sandbox Merchant Id',
+                        'type' => 'text',
+                        'id' => 'paykka_sandbox_merchant_id'
+                    ],
+                    [
+                        'title' => 'Sandbox Client Key',
+                        'type' => 'text',
+                        'id' => 'paykka_client_key'
+                    ],
+                    [
+                        'title' => 'Public Key',
+                        'type' => 'text',
+                        'id' => 'paykka_public_key'
+                    ],
+                    [
+                        'title' => 'Private Key',
+                        'type' => 'textarea',
+                        'id' => 'paykka_private_key'
+                    ],
+                    [
+                        'title' => 'Merchant Id',
+                        'type' => 'text',
+                        'id' => 'paykka_merchant_id'
+                    ],
+                    [
+                        'title' => 'Client Key',
+                        'type' => 'text',
+                        'id' => 'paykka_client_key'
+                    ],
+                    [
+                        'type' => 'sectionend',
+                        'id' => 'paykka_standard_end'
+                    ]
+                ];
+            case 'advanced':
+                return [
+                    [
+                        'title' => '高级设置',
+                        'type' => 'title',
+                        'id' => 'paykka_advanced_title'
+                    ],
+                    [
+                        'title' => '开启调试模式',
+                        'type' => 'checkbox',
+                        'id' => 'paykka_debug',
+                        'default' => 'no'
+                    ],
+                    [
+                        'type' => 'sectionend',
+                        'id' => 'paykka_advanced_end'
+                    ]
+                ];
+            case 'connection':
+            default:
+                return [
+                    [
+                        'title' => '连接设置',
+                        'type' => 'title',
+                        'id' => 'paykka_conn_title'
+                    ],
+                    [
+                        'title' => 'API Key',
+                        'type' => 'text',
+                        'id' => 'paykka_api_key'
+                    ],
+                    [
+                        'title' => '商户号',
+                        'type' => 'text',
+                        'id' => 'paykka_merchant_id'
+                    ],
+                    [
+                        'type' => 'sectionend',
+                        'id' => 'paykka_conn_end'
+                    ]
+                ];
+        }
     }
 
     public function payment_fields()
@@ -215,7 +353,7 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
 
         $paykkaPaymentHelper = new PaykkaRequestHandler();
         error_log("PaykkaRequestHandler: \n");
-        $response_data = $paykkaPaymentHelper->buildSessionUrl($order, $this->merchant_id, $this->private_key);
+        $response_data = $paykkaPaymentHelper->buildSessionUrl($order);
         ob_end_clean();
 
         if (isset($response_data['ret_code']) && $response_data['ret_code'] === '000000') {
@@ -223,7 +361,7 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
                 'result' => 'success',
                 'redirect' => $response_data['data']['session_url'],
             );
-        }else{
+        } else {
             return [
                 'result' => 'failure',
                 'message' => $response_data['ret_msg']

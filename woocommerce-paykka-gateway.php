@@ -56,7 +56,6 @@ function woocommerce_paykka_init()
     }
     add_filter('woocommerce_payment_gateways', 'woocommerce_paykka_add_gateway');
 
-
     function plugin_abspath_paykka()
     {
         return trailingslashit(plugin_dir_path(__FILE__));
@@ -78,6 +77,8 @@ function woocommerce_paykka_init()
     require_once plugin_basename('classes/wc-paykka-encrypted-card-gateway.php');
     require_once plugin_basename('classes/wc-paykka-drop-in-gateway.php');
     require_once plugin_basename('classes/wc-paykka-google-pay-gateway.php');
+
+    require_once plugin_basename('classes/utils/class-paykka-utils.php');
 }
 
 

@@ -76,7 +76,16 @@
                             type: 'CARD',
                             parameters: {
                                 allowedAuthMethods: ['PAN_ONLY', 'CRYPTOGRAM_3DS'],
-                                allowedCardNetworks: ['VISA', 'MASTERCARD']
+                                allowedCardNetworks: [
+                                    'AMEX',
+                                    'DISCOVER',
+                                    'JCB',
+                                    'MASTERCARD',
+                                    'VISA',
+                                    'MAESTRO',
+                                    'HIPERCARD',
+                                    'CUP' // China UnionPay（银联）
+                                ]
                             }
                         }]
                     }).then(function (isReadyToPay) {
@@ -162,7 +171,7 @@
 
             paymentClient.loadPaymentData(paymentDataRequest)
                 .then(function (paymentData) {
-                    
+
                     setPaymentGoogleData(paymentData)
                     console.log('paymentData', JSON.stringify(paymentData));
                     // document.getElementById('paykka-googlepay-payment-data').value = JSON.stringify(paymentData);
