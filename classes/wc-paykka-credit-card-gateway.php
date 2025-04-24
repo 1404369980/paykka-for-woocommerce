@@ -300,6 +300,8 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
 
     public function is_available()
     {
+
+        error_log(plugins_url('templates/paykka-accordion.php', __FILE__));
         // 检查支付方式是否已启用
         if ($this->enabled !== 'yes') {
             return false;

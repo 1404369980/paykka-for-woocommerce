@@ -80,16 +80,6 @@ class Paykka_Embedded_Gateway extends WC_Payment_Gateway
 
     public function is_available()
     {
-        $settings_paykka = get_option('woocommerce_paykka_settings');
-        // error_log('$woocommerce_paykka_settings: ' . print_r($settings_paykka, true));
-
-        error_log('$woocommerce_paykka_paykka_conn_title: ' . print_r(   get_option('woocommerce_paykka_conn_title'), true));
-        error_log('$woocommerce_paykka_paykka_sandbox_public_key: ' . print_r(   get_option('woocommerce_paykka_paykka_sandbox_public_key'), true));
-        error_log('$woocommerce_paykka_paykka_sandbox_public_key: ' . get_option('paykka_merchant_id'));
-        
-     ;
-
-
         // 检查支付方式是否已启用
         if ($this->enabled !== 'yes') {
             return false;
@@ -163,7 +153,7 @@ class Paykka_Embedded_Gateway extends WC_Payment_Gateway
 
 
         $order->update_status('pending', '等待跳转到收银台');
-        $page = get_page_by_path('paykka-embedded');
+        $page = get_page_by_path('paykka-accordion');
         error_log("url:" . get_permalink($page->ID));
 
         $callback_url = PaykkaCallBackHandler::getCallbackUrl($order->get_id());
