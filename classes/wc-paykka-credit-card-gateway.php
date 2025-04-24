@@ -243,12 +243,6 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
                         'id' => 'paykka_advanced_title'
                     ],
                     [
-                        'title' => '开启调试模式',
-                        'type' => 'checkbox',
-                        'id' => 'paykka_debug',
-                        'default' => 'no'
-                    ],
-                    [
                         'type' => 'sectionend',
                         'id' => 'paykka_advanced_end'
                     ]
@@ -260,16 +254,6 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
                         'title' => '连接设置',
                         'type' => 'title',
                         'id' => 'paykka_conn_title'
-                    ],
-                    [
-                        'title' => 'API Key',
-                        'type' => 'text',
-                        'id' => 'paykka_api_key'
-                    ],
-                    [
-                        'title' => '商户号',
-                        'type' => 'text',
-                        'id' => 'paykka_merchant_id'
                     ],
                     [
                         'type' => 'sectionend',
@@ -300,8 +284,6 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
 
     public function is_available()
     {
-
-        error_log(plugins_url('templates/paykka-accordion.php', __FILE__));
         // 检查支付方式是否已启用
         if ($this->enabled !== 'yes') {
             return false;
