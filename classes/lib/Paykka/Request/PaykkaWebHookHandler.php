@@ -13,18 +13,20 @@ class PaykkaWebHookHandler
         add_action('rest_api_init', array($this, 'register_webhook_endpoint'));
     }
 
-    public static function getWebHookUrl(){
+    public static function getWebHookUrl()
+    {
         return rest_url(PaykkaWebHookHandler::$WEB_HOOK_URL);
     }
 
 
-      /**
+    /**
      * 注册 Webhook 端点
      */
-    public function register_webhook_endpoint() {
+    public function register_webhook_endpoint()
+    {
         // error_log('Webhook endpoint registered'); // 调试日志
         register_rest_route('paykka/v1', '/webhook', array(
-            'methods'  => 'POST',
+            'methods' => 'POST',
             'callback' => array($this, 'handle_paykka_webhook_request'),
             'permission_callback' => '__return_true',
         ));
@@ -32,14 +34,15 @@ class PaykkaWebHookHandler
     }
 
 
-    function handle_paykka_webhook_request($request) {
+    function handle_paykka_webhook_request($request)
+    {
         // 获取请求数据
         $payload = $request->get_body();
         $data = json_decode($payload, true);
-        $this ->process_payment_webhook($data);
-        return new \WP_REST_Response(array('ret_code' => '000000', 'ret_msg'=> 'Success'), 200);
+        $this->process_payment_webhook($data);
+        return new \WP_REST_Response(array('ret_code' => '000000', 'ret_msg' => 'Success'), 200);
     }
-    
+
 
     // 处理 Webhook 数据
     public function process_payment_webhook($webHookOrder)
@@ -56,7 +59,10 @@ class PaykkaWebHookHandler
 
         switch ($payment_status) {
             case 'SUCCESS':
-                $order->update_status('completed', 'Payment Successful');
+                $order->payment_complete();
+                break;
+            case 'AUTHORIZED':
+                $order->payment_complete();
                 break;
             case 'FAILURE':
                 $order->update_status('failed', 'Payment Failed');

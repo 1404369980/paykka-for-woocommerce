@@ -59,7 +59,7 @@ class PaykkaRequestHandler
         $order_amount = intval(round($order->get_total() * pow(10, $decimal_places)));
 
         $paymentRequest = new PaymentRequest();
-        $paymentRequest->version = 'v1.0';
+        $paymentRequest->version = 'v1.2';
         $paymentRequest->__set('merchant_id', $PAYKKA_MERCHANT_ID);
         $paymentRequest->__set('payment_type', 'PURCHASE');
         $paymentRequest->__set('trans_id', $order->get_id());
@@ -145,7 +145,7 @@ class PaykkaRequestHandler
         $order_amount = intval(round($order->get_total() * pow(10, $decimal_places)));
 
         $paymentRequest = new PaymentRequest();
-        $paymentRequest->version = 'v1.0';
+        $paymentRequest->version = 'v1.2';
         $paymentRequest->__set('merchant_id', $PAYKKA_MERCHANT_ID);
         $paymentRequest->__set('payment_type', 'PURCHASE');
         $paymentRequest->__set('trans_id', $order->get_id());
@@ -247,7 +247,7 @@ class PaykkaRequestHandler
         $order_amount = intval(round($order->get_total() * pow(10, $decimal_places)));
 
         $paymentRequest = new PaymentRequest();
-        $paymentRequest->version = 'v1.0';
+        $paymentRequest->version = 'v1.2';
         $paymentRequest->__set('merchant_id', $PAYKKA_MERCHANT_ID);
         $paymentRequest->__set('payment_type', 'PURCHASE');
         $paymentRequest->__set('trans_id', $order->get_id());
