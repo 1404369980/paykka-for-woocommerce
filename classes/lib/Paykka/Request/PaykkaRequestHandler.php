@@ -25,13 +25,13 @@ require_once FENGQIAO_PAYKKA_URL . '/classes/lib/Paykka/Request/PaykkaCallBackHa
 class PaykkaRequestHandler
 {
 
-    public function buildSessionId($order)
+    public function buildSessionId($order, $session_mode)
     {
-        return $this->handlerSession($order, 'EMBEDDED');
+        return $this->handlerSession($order, $session_mode);
         // return $response_data['data']['session_id'];
     }
 
-    public function buildSessionUrl($order)
+    public function buildSessionUrl($order): mixed
     {
         return $this->handlerSession($order, 'HOST');
     }

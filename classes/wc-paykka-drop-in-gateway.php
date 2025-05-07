@@ -6,6 +6,9 @@
  */
 
 use lib\Paykka\Request\PaykkaRequestHandler;
+use lib\Paykka\Request\PaykkaWebHookHandler;
+use lib\Paykka\Request\PaykkaCallBackHandler;
+
 
 
 class Paykka_Drop_In_Gateway extends WC_Payment_Gateway
@@ -142,22 +145,64 @@ class Paykka_Drop_In_Gateway extends WC_Payment_Gateway
 
     public function process_payment($order_id)
     {
-        error_log('encrypted_card_data' . print_r(get_transient('encrypted_card_data'), true));
-        ob_start();
+            ob_start();
+        // 真实代码
         $order = wc_get_order($order_id);
-        $order->update_status('pending', '等待跳转到收银台');
+        $order->update_status('pending', 'processing');
 
-        try {
-            $this->handler_drop_in($order_id);
-        } catch (Exception $e) {
+        require_once FENGQIAO_PAYKKA_URL . '/classes/lib/Paykka/Request/PaykkaRequestHandler.php';
+        require_once FENGQIAO_PAYKKA_URL . '/classes/lib/Paykka/Request/PaykkaWebHookHandler.php';
+        require_once FENGQIAO_PAYKKA_URL . '/classes/lib/Paykka/Request/PaykkaCallBackHandler.php';
+
+        $paykkaPaymentHelper = new PaykkaRequestHandler();
+        error_log("PaykkaRequestHandler: \n");
+        $response_data = $paykkaPaymentHelper->buildSessionId($order, 'DROP_IN');
+
+        if (empty($response_data) || $response_data['ret_code'] !== '000000') {
             return [
                 'result' => 'failure',
-                'message' => $e->getMessage()
+                'message' => $response_data['ret_msg']
             ];
         }
+        $session_id = $response_data['data']['session_id'];
+
+        error_log("session_id:" . $session_id);
+        error_log("paykka_client_key:" . $this->client_key);
+
+
+        $order->update_status('pending', '等待跳转到收银台');
+        $page = get_page_by_path('paykka-dropin');
+        error_log("url:" . get_permalink($page->ID));
+
+        $callback_url = PaykkaCallBackHandler::getCallbackUrl($order->get_id());
+        $notify_url = PaykkaWebHookHandler::getWebHookUrl();
+
+        WC()->session->__unset('woocommerce_order_id');
+        WC()->session->__unset('paykka_dropin_session_id');
+        WC()->session->__unset('paykka_dropin_client_key');
+        WC()->session->__unset('paykka_dropin_callback_url');
+        WC()->session->__unset('paykka_dropin_notify_url');
+
+        WC()->session->set('woocommerce_order_id', $order_id);
+        WC()->session->set('paykka_dropin_session_id', $session_id);
+        WC()->session->set('paykka_dropin_client_key', $this->client_key);
+        WC()->session->set('paykka_dropin_callback_url', $callback_url);
+        WC()->session->set('paykka_dropin_notify_url', $notify_url);
+
+
+
+        error_log("WC()->session:" . WC()->session->get('paykka_session_id'));
 
         ob_end_clean();
-        return ['result' => 'success', 'redirect' => $order->get_checkout_order_received_url()];
+        // print "请求url" . $url_code . "";
+
+        // error_log("session url " . $url_code);
+        // $url =  get_permalink($page->ID) ."xxx" .$order_id;
+
+        return [
+            'result' => 'success',
+            'redirect' => get_permalink($page->ID),
+        ];
 
     }
 
