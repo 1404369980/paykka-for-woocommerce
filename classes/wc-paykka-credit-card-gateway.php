@@ -243,6 +243,11 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
                         'id' => 'paykka_advanced_title'
                     ],
                     [
+                        'title' => '仅授权',
+                        'type' => 'checkbox',
+                        'id' => 'paykka_capture_method_flag'
+                    ],
+                    [
                         'type' => 'sectionend',
                         'id' => 'paykka_advanced_end'
                     ]

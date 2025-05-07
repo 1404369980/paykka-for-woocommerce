@@ -138,7 +138,7 @@ class Paykka_Embedded_Gateway extends WC_Payment_Gateway
 
         $paykkaPaymentHelper = new PaykkaRequestHandler();
         error_log("PaykkaRequestHandler: \n");
-        $response_data = $paykkaPaymentHelper->buildSessionId($order, 'EMBEDDED');
+        $response_data = $paykkaPaymentHelper->buildSessionId($order, 'COMPONENT');
 
         if (empty($response_data) || $response_data['ret_code'] !== '000000') {
             return [

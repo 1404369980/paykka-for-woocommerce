@@ -23,7 +23,9 @@ class PaymentRequest {
     public $payment;
     public $browser;
     public $authentication;
-
+    
+    public $capture_method;
+    
     public function __get($property) {
         return $this->$property ?? null;
     }

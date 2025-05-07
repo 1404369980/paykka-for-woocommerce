@@ -33,7 +33,7 @@ class PaykkaRequestHandler
 
     public function buildSessionUrl($order): mixed
     {
-        return $this->handlerSession($order, 'HOST');
+        return $this->handlerSession($order, 'HOSTED');
     }
 
 
@@ -71,6 +71,12 @@ class PaykkaRequestHandler
         $paymentRequest->__set('expire_time', $expire_time);
         $paymentRequest->__set('session_mode', $session_mode);
 
+        // 设置仅授权
+        $paykka_capture_method_flag = get_option('paykka_capture_method_flag');
+        if ($paykka_capture_method_flag == 'yes') {
+            $paymentRequest->__set('capture_method', 'MANUAL');
+        }
+
         $paymentRequest->bill = $this->buildBill($order);
         $paymentRequest->shipping = $this->buildShipping($order);
         $paymentRequest->goods = $this->buildGoodsItems($order);
@@ -92,8 +98,8 @@ class PaykkaRequestHandler
         );
 
         $response = wp_remote_post('https://pub-fat.eu.paykka.com/apis/session', array(
-        // $response = wp_remote_post('http://localhost:8080/apis/session', array(
-        // $response = wp_remote_post('https://sandbox.aq.paykka.com/apis/session', array(
+            // $response = wp_remote_post('http://localhost:8080/apis/session', array(
+            // $response = wp_remote_post('https://sandbox.aq.paykka.com/apis/session', array(
             'headers' => $headers,
             'body' => $http_body,
             'timeout' => 16,
@@ -149,7 +155,12 @@ class PaykkaRequestHandler
         $paymentRequest->__set('notify_url', $notify_url);
         $paymentRequest->__set('return_url', $callback_url);
         $paymentRequest->__set('expire_time', $expire_time);
-        // $paymentRequest->__set('session_mode', 'HOST');
+
+        // 设置仅授权
+        $paykka_capture_method_flag = get_option('paykka_capture_method_flag');
+        if ($paykka_capture_method_flag == 'yes') {
+            $paymentRequest->__set('capture_method', 'MANUAL');
+        }
 
         $paymentRequest->bill = $this->buildBill($order);
         $paymentRequest->shipping = $this->buildShipping($order);
@@ -165,13 +176,13 @@ class PaykkaRequestHandler
 
         $payment = new PaymentInfo();
         // $card_encrypted = json_decode($card_encrypted_data, true);
-        $payment -> encrypted_card_no = $card_encrypted['encryptedCardNumber'];
-        $payment -> encrypted_exp_year = $card_encrypted['encryptedExpireYear'];
-        $payment -> encrypted_exp_month = $card_encrypted['encryptedExpireMonth'];
-        $payment -> encrypted_cvv = $card_encrypted['encryptedCVV'];
+        $payment->encrypted_card_no = $card_encrypted['encryptedCardNumber'];
+        $payment->encrypted_exp_year = $card_encrypted['encryptedExpireYear'];
+        $payment->encrypted_exp_month = $card_encrypted['encryptedExpireMonth'];
+        $payment->encrypted_cvv = $card_encrypted['encryptedCVV'];
         // $payment -> holder_name = 'BANKCARD';
-        $payment -> payment_method = 'BANKCARD';
-        $paymentRequest->payment = $payment ;
+        $payment->payment_method = 'BANKCARD';
+        $paymentRequest->payment = $payment;
 
         $http_body = $paymentRequest->toJson();
         error_log(message: "http_body: \n" . $http_body);
@@ -188,8 +199,8 @@ class PaykkaRequestHandler
         );
 
         $response = wp_remote_post('https://pub-fat.eu.paykka.com/apis/payments', array(
-        // $response = wp_remote_post('http://localhost:8080/apis/session', array(
-        // $response = wp_remote_post('https://sandbox.aq.paykka.com/apis/session', array(
+            // $response = wp_remote_post('http://localhost:8080/apis/session', array(
+            // $response = wp_remote_post('https://sandbox.aq.paykka.com/apis/session', array(
             'headers' => $headers,
             'body' => $http_body,
             'timeout' => 16,
@@ -246,7 +257,12 @@ class PaykkaRequestHandler
         $paymentRequest->__set('notify_url', $notify_url);
         $paymentRequest->__set('return_url', $callback_url);
         $paymentRequest->__set('expire_time', $expire_time);
-        // $paymentRequest->__set('session_mode', 'HOST');
+
+        // 设置仅授权
+        $paykka_capture_method_flag = get_option('paykka_capture_method_flag');
+        if ($paykka_capture_method_flag == 'yes') {
+            $paymentRequest->__set('capture_method', 'MANUAL');
+        }
 
         $paymentRequest->bill = $this->buildBill($order);
         $paymentRequest->shipping = $this->buildShipping($order);
@@ -255,10 +271,10 @@ class PaykkaRequestHandler
         $paymentRequest->browser = new Browser();
 
         $payment = new PaymentInfo();
-        $payment -> payment_method = 'GOOGLE_PAY';
-        $payment -> token_data = $google_token;
+        $payment->payment_method = 'GOOGLE_PAY';
+        $payment->token_data = $google_token;
 
-        $paymentRequest->payment = $payment ;
+        $paymentRequest->payment = $payment;
 
         $http_body = $paymentRequest->toJson();
         error_log(message: "http_body: \n" . $http_body);
@@ -275,8 +291,8 @@ class PaykkaRequestHandler
         );
 
         $response = wp_remote_post('https://pub-fat.eu.paykka.com/apis/payments', array(
-        // $response = wp_remote_post('http://localhost:8080/apis/session', array(
-        // $response = wp_remote_post('https://sandbox.aq.paykka.com/apis/session', array(
+            // $response = wp_remote_post('http://localhost:8080/apis/session', array(
+            // $response = wp_remote_post('https://sandbox.aq.paykka.com/apis/session', array(
             'headers' => $headers,
             'body' => $http_body,
             'timeout' => 16,
@@ -363,7 +379,7 @@ class PaykkaRequestHandler
         // $customer->registration_time  = $user->user_registered;  
         // $customer->email = $user-> ; 
         $customer->order_ip = $order->get_customer_ip_address();
-        $customer -> pay_ip = '127.0.0.1';
+        $customer->pay_ip = '127.0.0.1';
         return $customer;
     }
 
