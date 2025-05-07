@@ -121,7 +121,6 @@ class Paykka_Drop_In_Gateway extends WC_Payment_Gateway
 
     public function is_available()
     {
-        error_log("paykka_capture_method_flagis_available". get_option('paykka_capture_method_flag'));
         // 检查支付方式是否已启用
         if ($this->enabled !== 'yes') {
             return false;
