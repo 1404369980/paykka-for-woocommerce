@@ -74,6 +74,7 @@ class PaykkaRequestHandler
         // 设置仅授权
         $paykka_capture_method_flag = get_option('paykka_capture_method_flag');
         if ($paykka_capture_method_flag == 'yes') {
+            error_log("paykka_capture_method_flag". $paykka_capture_method_flag);
             $paymentRequest->__set('capture_method', 'MANUAL');
         }
 

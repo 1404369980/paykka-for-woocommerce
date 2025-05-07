@@ -54,6 +54,7 @@ class PaymentRequest {
             'display_merchant_name' => $this->display_merchant_name,
             'display_locale' => $this->display_locale,
             'theme_id' => $this->theme_id,
+            'capture_method' => $this->capture_method,
             'goods' => array_map(fn($good) => $this->objectToArray($good), $this->goods),
             'bill' => $this->objectToArray($this->bill),
             'browser' => $this->objectToArray($this->browser),
