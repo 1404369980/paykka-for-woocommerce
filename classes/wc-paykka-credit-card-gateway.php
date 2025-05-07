@@ -328,7 +328,7 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
         // wc_reduce_stock_levels($order_id);
 
         // 清空购物车
-        // WC()->cart->empty_cart();
+        WC()->cart->empty_cart();
 
         // 返回成功和重定向链接
 
@@ -361,7 +361,6 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
         $order = wc_get_order($order_id);
 
         $order->payment_complete();
-        WC()->cart->empty_cart();
         wc_reduce_stock_levels($order_id);
 
         $return_url = $this->get_return_url($order);

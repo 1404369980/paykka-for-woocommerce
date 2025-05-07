@@ -141,6 +141,7 @@ class Paykka_Google_Pay_Gateway extends WC_Payment_Gateway
         // 真实代码
         $order = wc_get_order($order_id);
         $order->update_status('pending', '支付中');
+        WC()->cart->empty_cart();
 
         require_once FENGQIAO_PAYKKA_URL . 'classes/lib/Paykka/Request/PaykkaRequestHandler.php';
         $paykkaPaymentHelper = new PaykkaRequestHandler();

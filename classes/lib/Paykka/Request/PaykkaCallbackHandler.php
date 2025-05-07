@@ -28,7 +28,6 @@ class PaykkaCallBackHandler
         $order = wc_get_order($order_id);
 
         $order->payment_complete();
-        WC()->cart->empty_cart();
         wc_reduce_stock_levels($order_id);
 
         // require_once plugin_basename('classes/wc-paykka-credit-card-gateway.php');

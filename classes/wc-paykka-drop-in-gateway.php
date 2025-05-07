@@ -171,6 +171,8 @@ class Paykka_Drop_In_Gateway extends WC_Payment_Gateway
 
 
         $order->update_status('pending', '等待跳转到收银台');
+        WC()->cart->empty_cart();
+        
         $page = get_page_by_path('paykka-dropin');
         error_log("url:" . get_permalink($page->ID));
 
