@@ -45,7 +45,7 @@ class Paykka_Encrypted_Card_Gateway extends WC_Payment_Gateway
         $this->private_key = $this->testmode ? $this->get_option('sandbox_private_key') : $this->get_option('private_key');
 
         $this->publishable_key = $this->testmode ? $this->get_option('test_publishable_key') : $this->get_option('publishable_key');
-        $this->merchant_id = $this->testmode ? $this->get_option('merchant_id') : $this->get_option('sandbox_merchant_id');
+        $this->merchant_id = $this->testmode ? $this->get_option('sandbox_merchant_id') : $this->get_option('merchant_id');
         $this->client_key = $this->get_option('client_key');
         // 这个动作挂钩保存设置
         add_action('woocommerce_update_options_payment_gateways_' . $this->id, array($this, 'process_admin_options'));
@@ -111,78 +111,56 @@ class Paykka_Encrypted_Card_Gateway extends WC_Payment_Gateway
         $order->update_status('pending', '等待跳转到收银台');
         WC()->cart->empty_cart();
         ob_end_clean();
-        $page = get_page_by_path('paykka-card-encrypted');
-        return [
-            'result' => 'success',
-            'redirect' => add_query_arg('order_id', $order_id, get_permalink($page->ID)),
-        ];
+
+        return array(
+            'result'   => 'success',
+            'redirect' => add_query_arg('order_id', $order_id, paykka_get_payment_url('card-encrypted')),
+        );
     }
 
 
 
     public function handler_encrypted_card(\WP_REST_Request $request)
     {
-        require_once FENGQIAO_PAYKKA_URL . 'classes/lib/Paykka/Request/PaykkaRequestHandler.php';
-        require_once FENGQIAO_PAYKKA_URL . '/classes/lib/Paykka/Request/PaykkaWebHookHandler.php';
-        require_once FENGQIAO_PAYKKA_URL . '/classes/lib/Paykka/Request/PaykkaCallBackHandler.php';
-        // require_once FENGQIAO_PAYKKA_URL . '/classes/lib/Paykka/Api/Browser.php';
-        error_log("PaykkaRequestHandler: \n");
+        require_once PAYKKA_PLUGIN_PATH . 'classes/lib/Paykka/Request/PaykkaRequestHandler.php';
 
         $params = $request->get_params();
-        // $browser_info_data = sanitize_text_field($params['browser_info']);
-        // $browser_info = json_decode($browser_info_data, true);
+        $order_id = isset($params['order_id']) ? absint($params['order_id']) : 0;
+        $encrypted_card_data = isset($params['encrypted_card_data']) ? $params['encrypted_card_data'] : null;
 
-        // $browser = new Browser();
-        // $browser -> user_agent = $browser_info['userAgent'];
-        // $browser -> color_depth = $browser_info['colorDepth'];
-        // $browser -> language = $browser_info['language'];
-        // // $browser -> java_enabled = $browser_info['userAgent'];
-        // // $browser -> device_type = $browser_info['userAgent'];
-        // // $browser -> terminal_type = $browser_info['userAgent'];
-        // // $browser -> device_os = $browser_info['userAgent'];
-        // $browser -> timezone_offset = $browser_info['timezone'];
-        // $browser -> screen_height = $browser_info['screenHeight'];
-        // $browser -> screen_width = $browser_info['screenWidth'];
-        // $browser -> device_finger_print_id = $browser_info['userAgent'];
-        // $browser -> fraud_detection_id = $browser_info['userAgent'];
-
-        $encrypted_card_data = $params['encrypted_card_data'];
-        $order_id = $params['order_id'];
+        if (!$order_id || !is_array($encrypted_card_data)) {
+            return new \WP_REST_Response(array('success' => false, 'message' => __('Invalid request', 'paykka-for-woocommerce')), 400);
+        }
 
         $order = wc_get_order($order_id);
+        if (!$order || !$order->get_id()) {
+            return new \WP_REST_Response(array('success' => false, 'message' => __('Order not found', 'paykka-for-woocommerce')), 404);
+        }
 
         $paykkaPaymentHelper = new PaykkaRequestHandler();
-        error_log("PaykkaRequestHandler: \n");
         $response_data = $paykkaPaymentHelper->handlerCardPayment($order, $encrypted_card_data);
-        error_log("payment_complete: \n");
-        $order->payment_complete();
 
         if (isset($response_data['ret_code']) && $response_data['ret_code'] === '000000') {
-            return new WP_REST_Response([
+            $order->payment_complete();
+            return new \WP_REST_Response(array(
                 'success' => true,
                 'redirect_url' => $this->get_return_url($order)
-            ]);
-        } else {
-            $error_message = isset($response_data['ret_msg']) ? sanitize_text_field($response_data['ret_msg']) : __('Payment processing failed', 'your-text-domain');
-            
-            // 记录详细日志
-            error_log('[Paykka Payment Error]:\n'. print_r( $response_data, true));
-            return new WP_REST_Response([
-                'success' => false,
-                'message' => $error_message
-            ]);
+            ));
         }
+
+        $error_message = isset($response_data['ret_msg']) ? sanitize_text_field($response_data['ret_msg']) : __('Payment processing failed', 'paykka-for-woocommerce');
+        if (function_exists('paykka_is_debug') && paykka_is_debug() && is_array($response_data)) {
+            error_log('[Paykka Encrypted Card Error] ' . wp_json_encode($response_data));
+        }
+        return new \WP_REST_Response(array('success' => false, 'message' => $error_message));
     }
 
     public function register_encrypted_card_endpoint()
     {
-        error_log('Webhook endpoint registered'); // 调试日志
         register_rest_route('paykka/v1', '/encrypted_card', array(
             'methods' => 'POST',
             'callback' => array($this, 'handler_encrypted_card'),
             'permission_callback' => '__return_true',
         ));
-        error_log('注册webhook成功register_encrypted_card_endpoint');
-
     }
 }

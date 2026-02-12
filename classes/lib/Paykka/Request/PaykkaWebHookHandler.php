@@ -47,20 +47,30 @@ class PaykkaWebHookHandler
     // 处理 Webhook 数据
     public function process_payment_webhook($webHookOrder)
     {
-        error_log('process_payment_webhook:' . $webHookOrder . '');
+        if (!is_array($webHookOrder) || empty($webHookOrder['trans_id']) || empty($webHookOrder['status'])) {
+            if (function_exists('paykka_is_debug') && paykka_is_debug()) {
+                error_log('[Paykka Webhook] Invalid payload: ' . wp_json_encode($webHookOrder));
+            }
+            return;
+        }
+
         $order_id = $webHookOrder['trans_id'];
         $payment_status = $webHookOrder['status'];
 
         $order = wc_get_order($order_id);
-        if (!$order) {
-            error_log('订单id未找到:' . $order_id . '');
+        if (!$order || !$order->get_id()) {
+            if (function_exists('paykka_is_debug') && paykka_is_debug()) {
+                error_log('[Paykka Webhook] Order not found: ' . $order_id);
+            }
             return;
         }
 
+        $current_status = $order->get_status();
+        if (in_array($current_status, array('processing', 'completed'), true)) {
+            return;
+        }
         switch ($payment_status) {
             case 'SUCCESS':
-                $order->payment_complete();
-                break;
             case 'AUTHORIZED':
                 $order->payment_complete();
                 break;
@@ -71,19 +81,26 @@ class PaykkaWebHookHandler
                 $order->update_status('refunded', 'Payment Refunded');
                 break;
             default:
-                error_log('不支持的交易状态' . $payment_status . '');
+                if (function_exists('paykka_is_debug') && paykka_is_debug()) {
+                    error_log('[Paykka Webhook] Unhandled status: ' . $payment_status);
+                }
                 break;
         }
     }
 
 
-    // 验证 Webhook 请求
+    /**
+     * 验证 Webhook 签名（若 Paykka 提供 secret 可在后台配置后在此校验）
+     * 当前 handle_paykka_webhook_request 未调用此方法，按需接入。
+     */
     public function validate_webhook($data)
     {
-        $signature = $_SERVER['HTTP_X_PAYKKA_SIGNATURE'];
-        $secret_key = 'your_secret_key';
-        $expected_signature = hash_hmac('sha256', json_encode($data), $secret_key);
-        return hash_equals($expected_signature, $signature);
+        $secret = get_option('paykka_webhook_secret', '');
+        if ($secret === '' || empty($_SERVER['HTTP_X_PAYKKA_SIGNATURE'])) {
+            return false;
+        }
+        $expected = hash_hmac('sha256', is_string($data) ? $data : wp_json_encode($data), $secret);
+        return hash_equals($expected, sanitize_text_field(wp_unslash($_SERVER['HTTP_X_PAYKKA_SIGNATURE'])));
     }
 
 }

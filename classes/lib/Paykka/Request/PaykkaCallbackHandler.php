@@ -14,28 +14,36 @@ class PaykkaCallBackHandler
         add_action('woocommerce_api_wc_gateway_paykka_payment_callback', array($this, 'handle_payment_callback'));
     }
 
-    public static function getCallbackUrl($order_id){
-        return add_query_arg('wc-api', 'WC_Gateway_Paykka_Payment_callback', home_url('/')) . "&order_id=" . $order_id;
+    public static function getCallbackUrl($order_id)
+    {
+        return add_query_arg(array(
+            'wc-api'   => 'WC_Gateway_Paykka_Payment_callback',
+            'order_id' => $order_id,
+        ), home_url('/'));
     }
 
     public function handle_payment_callback()
     {
-        ob_start(); // 开启输出缓冲区
-       
+        $order_id = isset($_REQUEST['order_id']) ? absint($_REQUEST['order_id']) : 0;
+        if (!$order_id) {
+            wp_safe_redirect(wc_get_page_permalink('myaccount'));
+            exit;
+        }
 
-        $order_id = $_REQUEST['order_id'];
-        //  error_log('');
         $order = wc_get_order($order_id);
+        if (!$order || !$order->get_id()) {
+            wp_safe_redirect(wc_get_page_permalink('myaccount'));
+            exit;
+        }
+
+        if ($order->get_status() === 'processing' || $order->get_status() === 'completed') {
+            wp_safe_redirect(wc_get_endpoint_url('view-order', $order_id, wc_get_page_permalink('myaccount')));
+            exit;
+        }
 
         $order->payment_complete();
         wc_reduce_stock_levels($order_id);
 
-        // require_once plugin_basename('classes/wc-paykka-credit-card-gateway.php');
-        // $gateway =  new \Paykka_Credit_Card_Gateway();
-        // $return_url = $gateway->get_return_url($order);
-        // $return_url = $this -> gateway->get_return_url($order);
-
-        ob_end_clean();
         wp_safe_redirect(wc_get_endpoint_url('view-order', $order_id, wc_get_page_permalink('myaccount')));
         exit;
     }

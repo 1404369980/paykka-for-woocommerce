@@ -42,7 +42,7 @@ class Paykka_Google_Pay_Gateway extends WC_Payment_Gateway
         $this->private_key = $this->testmode ? $this->get_option('sandbox_private_key') : $this->get_option('private_key');
 
         $this->publishable_key = $this->testmode ? $this->get_option('test_publishable_key') : $this->get_option('publishable_key');
-        $this->merchant_id = $this->testmode ? $this->get_option('merchant_id') : $this->get_option('sandbox_merchant_id');
+        $this->merchant_id = $this->testmode ? $this->get_option('sandbox_merchant_id') : $this->get_option('merchant_id');
         $this->client_key = $this->get_option('client_key');
         // 这个动作挂钩保存设置
         add_action('woocommerce_update_options_payment_gateways_' . $this->id, array($this, 'process_admin_options'));
@@ -105,16 +105,11 @@ class Paykka_Google_Pay_Gateway extends WC_Payment_Gateway
         $raw_post = file_get_contents('php://input');
         $request_data = json_decode($raw_post, true);
 
-        error_log('Process Payment Request: ' . print_r($request_data, true));
-
-        // 检查数据是否有效
-        if (json_last_error() !== JSON_ERROR_NONE || !is_array($request_data)) {
-            throw new Exception('Invalid JSON data received');
+        if (json_last_error() !== JSON_ERROR_NONE || !is_array($request_data) || empty($request_data['payment_data'])) {
+            return array('result' => 'failure', 'message' => __('Invalid payment data', 'paykka-for-woocommerce'));
         }
 
-        // 提取 payment_google_data
         $payment_google_data = null;
-
         foreach ($request_data['payment_data'] as $payment_item) {
             if ($payment_item['key'] === 'payment_google_data') {
                 $payment_google_data = json_decode($payment_item['value'], true);
@@ -136,31 +131,27 @@ class Paykka_Google_Pay_Gateway extends WC_Payment_Gateway
         }
 
         $google_token = $payment_google_data['paymentMethodData']['tokenizationData']['token'];
-        error_log('google_token: ' . $google_token);
 
-        // 真实代码
         $order = wc_get_order($order_id);
         $order->update_status('pending', '支付中');
         WC()->cart->empty_cart();
 
-        require_once FENGQIAO_PAYKKA_URL . 'classes/lib/Paykka/Request/PaykkaRequestHandler.php';
+        require_once PAYKKA_PLUGIN_PATH . 'classes/lib/Paykka/Request/PaykkaRequestHandler.php';
         $paykkaPaymentHelper = new PaykkaRequestHandler();
-        error_log("PaykkaRequestHandler: \n");
         $response_data = $paykkaPaymentHelper->handlerGooglePayPayment($order, $google_token);
-        error_log('response_data: ' . $response_data);
         ob_end_clean();
 
 
         if (isset($response_data['ret_code']) && $response_data['ret_code'] === '000000') {
-            return [
-                'result' => 'success', 
-                'redirect' => $order->get_checkout_order_received_url()];
-        }else{
-            return [
-                'result' => 'failure',
-                'message' => $response_data['ret_msg']
-            ];
-        }        
+            return array(
+                'result' => 'success',
+                'redirect' => $order->get_checkout_order_received_url()
+            );
+        }
+        return array(
+            'result' => 'failure',
+            'message' => isset($response_data['ret_msg']) ? $response_data['ret_msg'] : __('Payment failed', 'paykka-for-woocommerce')
+        );
     }
 
 }

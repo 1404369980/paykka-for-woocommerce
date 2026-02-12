@@ -19,18 +19,21 @@ final class WC_Gateway_Paykka_Support extends AbstractPaymentMethodType
      */
     public function initialize()
     {
-        $this->settings = get_option('woocommerce_paykka_gateway_settings', array()); // 替换为你的支付网关设置选项
+        $this->settings = array(
+            'enabled' => get_option('paykka_enabled', 'yes'),
+            'title'   => get_option('paykka_title', __('Paykka', 'paykka-for-woocommerce')),
+            'description' => get_option('paykka_description', __('使用 Paykka 安全支付', 'paykka-for-woocommerce')),
+        );
     }
 
     /**
-     * 检查支付方法是否可用
+     * 检查支付方法是否可用（与 PayPal 一致：主开关开启即可）
      *
      * @return bool
      */
     public function is_active()
     {
-        // error_log("is_active:". ! empty( $this->settings['enabled'] ) && 'yes' === $this->settings['enabled']);
-        return true;
+        return get_option('paykka_enabled', 'yes') === 'yes';
     }
 
     /**
@@ -59,9 +62,10 @@ final class WC_Gateway_Paykka_Support extends AbstractPaymentMethodType
     public function get_payment_method_data()
     {
         return array(
-            'title' => $this->settings['title'] ?? __('PayKKa Hosted Page', 'paykka-for-woocommerce'),
-            'description' => $this->settings['description'] ?? __('PayKKa Hosted Page payments.', 'paykka-for-woocommerce'),
-            'supports' => array('products'), // 支持的支付功能
+            'title'       => $this->settings['title'],
+            'description' => $this->settings['description'],
+            'supports'    => array('products'),
+            'paykka_mode' => get_option('paykka_payment_mode', 'hosted'),
         );
     }
 }

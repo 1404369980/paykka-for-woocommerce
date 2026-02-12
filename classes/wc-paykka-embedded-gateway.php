@@ -44,7 +44,7 @@ class Paykka_Embedded_Gateway extends WC_Payment_Gateway
         $this->private_key = $this->testmode ? $this->get_option('sandbox_private_key') : $this->get_option('private_key');
 
         $this->publishable_key = $this->testmode ? $this->get_option('test_publishable_key') : $this->get_option('publishable_key');
-        $this->merchant_id = $this->testmode ? $this->get_option('merchant_id') : $this->get_option('sandbox_merchant_id');
+        $this->merchant_id = $this->testmode ? $this->get_option('sandbox_merchant_id') : $this->get_option('merchant_id');
         $this->client_key = $this->get_option('client_key');
         // 这个动作挂钩保存设置
         add_action('woocommerce_update_options_payment_gateways_' . $this->id, array($this, 'process_admin_options'));
@@ -132,29 +132,22 @@ class Paykka_Embedded_Gateway extends WC_Payment_Gateway
 
         // $url_code = $this->do_paykka_payment($order);
 
-        require_once FENGQIAO_PAYKKA_URL . 'classes/lib/Paykka/Request/PaykkaRequestHandler.php';
-        require_once FENGQIAO_PAYKKA_URL . '/classes/lib/Paykka/Request/PaykkaWebHookHandler.php';
-        require_once FENGQIAO_PAYKKA_URL . '/classes/lib/Paykka/Request/PaykkaCallBackHandler.php';
+        require_once PAYKKA_PLUGIN_PATH . 'classes/lib/Paykka/Request/PaykkaRequestHandler.php';
+        require_once PAYKKA_PLUGIN_PATH . 'classes/lib/Paykka/Request/PaykkaWebHookHandler.php';
+        require_once PAYKKA_PLUGIN_PATH . 'classes/lib/Paykka/Request/PaykkaCallBackHandler.php';
 
         $paykkaPaymentHelper = new PaykkaRequestHandler();
-        error_log("PaykkaRequestHandler: \n");
         $response_data = $paykkaPaymentHelper->buildSessionId($order, 'COMPONENT');
 
-        if (empty($response_data) || $response_data['ret_code'] !== '000000') {
-            return [
+        if (empty($response_data) || !isset($response_data['ret_code']) || $response_data['ret_code'] !== '000000') {
+            return array(
                 'result' => 'failure',
-                'message' => $response_data['ret_msg']
-            ];
+                'message' => isset($response_data['ret_msg']) ? $response_data['ret_msg'] : __('Payment session failed', 'paykka-for-woocommerce')
+            );
         }
         $session_id = $response_data['data']['session_id'];
 
-        error_log("session_id:" . $session_id);
-        error_log("paykka_client_key:" . $this->client_key);
-
-
         $order->update_status('pending', '等待跳转到收银台');
-        $page = get_page_by_path('paykka-accordion');
-        error_log("url:" . get_permalink($page->ID));
 
         $callback_url = PaykkaCallBackHandler::getCallbackUrl($order->get_id());
         $notify_url = PaykkaWebHookHandler::getWebHookUrl();
@@ -171,36 +164,29 @@ class Paykka_Embedded_Gateway extends WC_Payment_Gateway
         WC()->session->set('paykka_callback_url', $callback_url);
         WC()->session->set('paykka_notify_url', $notify_url);
 
-
-
-        error_log("WC()->session:" . WC()->session->get('paykka_session_id'));
-
         ob_end_clean();
-        // print "请求url" . $url_code . "";
 
-        // error_log("session url " . $url_code);
-        // $url =  get_permalink($page->ID) ."xxx" .$order_id;
-
-        return [
-            'result' => 'success',
-            'redirect' => get_permalink($page->ID),
-        ];
+        return array(
+            'result'   => 'success',
+            'redirect' => paykka_get_payment_url('accordion'),
+        );
     }
 
     public function handle_payment_callback()
     {
-        ob_start(); // 开启输出缓冲区
-
-        $order_id = $_REQUEST['order_id'];
+        $order_id = isset($_REQUEST['order_id']) ? absint($_REQUEST['order_id']) : 0;
+        if (!$order_id) {
+            wp_safe_redirect(wc_get_page_permalink('myaccount'));
+            exit;
+        }
         $order = wc_get_order($order_id);
-
+        if (!$order || !$order->get_id()) {
+            wp_safe_redirect(wc_get_page_permalink('myaccount'));
+            exit;
+        }
         $order->payment_complete();
         wc_reduce_stock_levels($order_id);
-
-        $return_url = $this->get_return_url($order);
-
-        ob_end_clean();
-        wp_safe_redirect($return_url);
+        wp_safe_redirect($this->get_return_url($order));
         exit;
     }
 }

@@ -13,6 +13,8 @@ class PaymentRequest {
     public $return_url;
     public $expire_time;
     public $session_mode;
+    /** 交易失败或取消跳转地址 (v3) */
+    public $cancel_url;
     public $display_merchant_name;
     public $display_locale;
     public $theme_id;
@@ -39,16 +41,15 @@ class PaymentRequest {
     }
 
     private function toArray() {
-        return [
-            'version' => $this->version,
+        $arr = array(
             'merchant_id' => $this->merchant_id,
             'payment_type' => $this->payment_type,
             'trans_id' => $this->trans_id,
-            'timestamp' => $this->timestamp,
             'currency' => $this->currency,
             'amount' => $this->amount,
             'notify_url' => $this->notify_url,
             'return_url' => $this->return_url,
+            'cancel_url' => $this->cancel_url,
             'expire_time' => $this->expire_time,
             'session_mode' => $this->session_mode,
             'display_merchant_name' => $this->display_merchant_name,
@@ -62,7 +63,10 @@ class PaymentRequest {
             'customer' => $this->objectToArray($this->customer),
             'payment' => $this->objectToArray($this->payment),
             'authentication' => $this->objectToArray($this->authentication),
-        ];
+        );
+        return array_filter($arr, function ($v) {
+            return $v !== null && $v !== '';
+        });
     }
 
     private function objectToArray($object) {

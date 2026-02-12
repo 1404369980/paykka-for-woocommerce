@@ -4,3 +4,4 @@
 
 # IntelliJ project files
 .vscode
+.DS_Store

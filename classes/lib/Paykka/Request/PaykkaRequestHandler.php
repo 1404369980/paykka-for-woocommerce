@@ -12,15 +12,16 @@ use lib\Paykka\Request\PaykkaWebHookHandler;
 use lib\Paykka\Request\PaykkaCallBackHandler;
 
 
-require_once FENGQIAO_PAYKKA_URL . '/classes/lib/Paykka/Api/Bill.php';
-require_once FENGQIAO_PAYKKA_URL . '/classes/lib/Paykka/Api/Browser.php';
-require_once FENGQIAO_PAYKKA_URL . '/classes/lib/Paykka/Api/Shipping.php';
-require_once FENGQIAO_PAYKKA_URL . '/classes/lib/Paykka/Api/Goods.php';
-require_once FENGQIAO_PAYKKA_URL . '/classes/lib/Paykka/Api/PayCustomer.php';
-require_once FENGQIAO_PAYKKA_URL . '/classes/lib/Paykka/Api/PaymentInfo.php';
-require_once FENGQIAO_PAYKKA_URL . '/classes/lib/Paykka/Api/PaymentRequest.php';
-require_once FENGQIAO_PAYKKA_URL . '/classes/lib/Paykka/Request/PaykkaWebHookHandler.php';
-require_once FENGQIAO_PAYKKA_URL . '/classes/lib/Paykka/Request/PaykkaCallBackHandler.php';
+$paykka_base = defined('PAYKKA_PLUGIN_PATH') ? PAYKKA_PLUGIN_PATH : (defined('FENGQIAO_PAYKKA_URL') ? FENGQIAO_PAYKKA_URL : '');
+require_once $paykka_base . 'classes/lib/Paykka/Api/Bill.php';
+require_once $paykka_base . 'classes/lib/Paykka/Api/Browser.php';
+require_once $paykka_base . 'classes/lib/Paykka/Api/Shipping.php';
+require_once $paykka_base . 'classes/lib/Paykka/Api/Goods.php';
+require_once $paykka_base . 'classes/lib/Paykka/Api/PayCustomer.php';
+require_once $paykka_base . 'classes/lib/Paykka/Api/PaymentInfo.php';
+require_once $paykka_base . 'classes/lib/Paykka/Api/PaymentRequest.php';
+require_once $paykka_base . 'classes/lib/Paykka/Request/PaykkaWebHookHandler.php';
+require_once $paykka_base . 'classes/lib/Paykka/Request/PaykkaCallBackHandler.php';
 
 class PaykkaRequestHandler
 {
@@ -28,7 +29,6 @@ class PaykkaRequestHandler
     public function buildSessionId($order, $session_mode)
     {
         return $this->handlerSession($order, $session_mode);
-        // return $response_data['data']['session_id'];
     }
 
     public function buildSessionUrl($order): mixed
@@ -37,44 +37,57 @@ class PaykkaRequestHandler
     }
 
 
+    /**
+     * 创建收银台 Session（Hosted / Drop-in / Component）
+     * 文档: https://docs.paykka.com/zh-hans/payments/apis/payments/openapi/收银台/session-opl_1
+     * 接口: POST /v3/payment/acq/session
+     *
+     * @param \WC_Order $order
+     * @param string    $session_mode HOSTED | DROP_IN | COMPONENT
+     * @return array|null 统一为 ['ret_code'=>'000000', 'data'=>['session_id'=>..., 'session_url'=>...]] 或失败信息
+     */
     public function handlerSession($order, $session_mode)
     {
         $paykkaSettings = getPaykkaSettings();
         $PAYKKA_MERCHANT_ID = $paykkaSettings['paykka_merchant_id'];
         $PAYKKA_API_KEY = $paykkaSettings['paykka_private_key'];
+        $sandbox = get_option('paykka_sandbox_flag') === 'yes';
+        $app_id = $sandbox ? get_option('paykka_sandbox_app_id', '') : get_option('paykka_app_id', '');
+        if ($app_id === '') {
+            $app_id = $PAYKKA_MERCHANT_ID;
+        }
 
         $now = new \DateTime('now', new \DateTimeZone('UTC'));
-        // 转换为香港时间
         $now->setTimezone(new \DateTimeZone('Asia/Hong_Kong'));
-        // 使用 DateInterval 对象来添加 5 分钟
         $now->add(new \DateInterval('PT5M'));
-        $expire_time = $now->format('Y-m-d H:i:s');
-        $timestamp = round(microtime(true) * 1000);
+        $expire_time = $now->format('Y-m-d\TH:i:sO');
+        $timestamp = (string) round(microtime(true) * 1000);
+        $nonce = (string) wp_rand(1000000000000000, 9999999999999999);
 
         $callback_url = PaykkaCallBackHandler::getCallbackUrl($order->get_id());
         $notify_url = PaykkaWebHookHandler::getWebHookUrl();
+        $cancel_url = get_option('paykka_cancel_url', $callback_url);
 
-        // 币种金额
         $decimal_places = get_option('woocommerce_price_num_decimals', 2);
         $order_amount = intval(round($order->get_total() * pow(10, $decimal_places)));
 
         $paymentRequest = new PaymentRequest();
-        $paymentRequest->version = 'v1.2';
         $paymentRequest->__set('merchant_id', $PAYKKA_MERCHANT_ID);
         $paymentRequest->__set('payment_type', 'PURCHASE');
-        $paymentRequest->__set('trans_id', $order->get_id());
-        $paymentRequest->__set('timestamp', $timestamp);
+        $paymentRequest->__set('trans_id', (string) $order->get_id());
         $paymentRequest->__set('currency', $order->get_currency());
         $paymentRequest->__set('amount', $order_amount);
         $paymentRequest->__set('notify_url', $notify_url);
         $paymentRequest->__set('return_url', $callback_url);
+        $paymentRequest->__set('cancel_url', $cancel_url);
         $paymentRequest->__set('expire_time', $expire_time);
         $paymentRequest->__set('session_mode', $session_mode);
 
-        // 设置仅授权
         $paykka_capture_method_flag = get_option('paykka_capture_method_flag');
-        if ($paykka_capture_method_flag == 'yes') {
+        if ($paykka_capture_method_flag === 'yes') {
             $paymentRequest->__set('capture_method', 'MANUAL');
+        } else {
+            $paymentRequest->__set('capture_method', 'AUTOMATIC');
         }
 
         $paymentRequest->bill = $this->buildBill($order);
@@ -84,42 +97,68 @@ class PaykkaRequestHandler
         $paymentRequest->payment = new PaymentInfo();
 
         $http_body = $paymentRequest->toJson();
-        error_log(message: "http_body: \n" . $http_body);
+        $request_path = '/v3/payment/acq/session';
+        $signStr = $this->paykkaSignV3('POST', $request_path, $timestamp, $nonce, $http_body, $PAYKKA_API_KEY);
+        if ($signStr === null) {
+            wc_add_notice(__('Payment signature error', 'paykka-for-woocommerce'), 'error');
+            return null;
+        }
 
-        //sign
-        $signStr = $this->paykkaSign($PAYKKA_MERCHANT_ID, $timestamp, $http_body, $PAYKKA_API_KEY);
-
-        error_log("signStr: \n" . $signStr);
-        // 定义请求头
         $headers = array(
-            'Content-Type' => 'application/json', // 设置内容类型为 JSON
-            'signature' => $signStr,
-            'type' => 'RSA256' // 添加认证头
+            'Content-Type'       => 'application/json',
+            'x-paykka-appid'     => $app_id,
+            'x-paykka-timestamp' => $timestamp,
+            'x-paykka-nonce'     => $nonce,
+            'x-paykka-sign-alg'  => 'SHA256_WITH_RSA',
+            'x-paykka-sign'      => $signStr,
         );
 
-        $response = wp_remote_post('https://pub-fat.eu.paykka.com/apis/session', array(
-            // $response = wp_remote_post('http://localhost:8080/apis/session', array(
-            // $response = wp_remote_post('https://sandbox.aq.paykka.com/apis/session', array(
+        $api_base = $this->getPaykkaApiBaseUrl();
+        $response = wp_remote_post($api_base . '/v3/payment/acq/session', array(
             'headers' => $headers,
             'body' => $http_body,
             'timeout' => 16,
         ));
 
-        // error_log("response: \n", $http_body);
-
-        // 检查请求是否出错
         if (is_wp_error($response)) {
             wc_add_notice('Payment error: ' . $response->get_error_message(), 'error');
-            return;
+            return null;
         }
 
         $response_body = wp_remote_retrieve_body($response);
         $response_data = json_decode($response_body, true);
+        $http_code = wp_remote_retrieve_response_code($response);
 
-        error_log("response_body: \n" . $response_body);
+        $this->logPaykkaResult('Session', $api_base . '/v3/payment/acq/session', $http_code, $response_body, $http_body);
 
-        // echo '<script>console.log("回调准备' . $data . '")</script>';
-        return $response_data;
+        if ($http_code === 200 && is_array($response_data)) {
+            if (!empty($response_data['error_code']) && $response_data['error_code'] !== '0' && $response_data['error_code'] !== '000000') {
+                return array(
+                    'ret_code' => $response_data['error_code'],
+                    'ret_msg'  => isset($response_data['error_description']) ? $response_data['error_description'] : __('Session creation failed', 'paykka-for-woocommerce'),
+                );
+            }
+            // 兼容两种返回：顶层 session_id/session_url 或 data.session_id/data.session_url
+            $data = isset($response_data['data']) && is_array($response_data['data']) ? $response_data['data'] : $response_data;
+            $session_id = isset($data['session_id']) ? $data['session_id'] : '';
+            $session_url = isset($data['session_url']) ? $data['session_url'] : '';
+            return array(
+                'ret_code' => '000000',
+                'ret_msg'  => '',
+                'data'     => array(
+                    'session_id' => $session_id,
+                    'session_url' => $session_url,
+                ),
+            );
+        }
+
+        if (is_array($response_data) && isset($response_data['ret_code'])) {
+            return $response_data;
+        }
+        return array(
+            'ret_code' => (string) $http_code,
+            'ret_msg'  => isset($response_data['ret_msg']) ? $response_data['ret_msg'] : $response_body,
+        );
     }
 
 
@@ -168,58 +207,36 @@ class PaykkaRequestHandler
         $paymentRequest->customer = $this->buildCustomer($order);
         $paymentRequest->browser = new Browser();
 
-        $card_encrypted_encode = json_encode($card_encrypted_data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
-        error_log("card_encrypted: \n" . $card_encrypted_encode);
-
-
-        $card_encrypted = json_decode($card_encrypted_encode, true);
-
+        $card_encrypted = is_array($card_encrypted_data) ? $card_encrypted_data : (array) json_decode($card_encrypted_data, true);
         $payment = new PaymentInfo();
-        // $card_encrypted = json_decode($card_encrypted_data, true);
-        $payment->encrypted_card_no = $card_encrypted['encryptedCardNumber'];
-        $payment->encrypted_exp_year = $card_encrypted['encryptedExpireYear'];
-        $payment->encrypted_exp_month = $card_encrypted['encryptedExpireMonth'];
-        $payment->encrypted_cvv = $card_encrypted['encryptedCVV'];
-        // $payment -> holder_name = 'BANKCARD';
+        $payment->encrypted_card_no = isset($card_encrypted['encryptedCardNumber']) ? $card_encrypted['encryptedCardNumber'] : '';
+        $payment->encrypted_exp_year = isset($card_encrypted['encryptedExpireYear']) ? $card_encrypted['encryptedExpireYear'] : '';
+        $payment->encrypted_exp_month = isset($card_encrypted['encryptedExpireMonth']) ? $card_encrypted['encryptedExpireMonth'] : '';
+        $payment->encrypted_cvv = isset($card_encrypted['encryptedCVV']) ? $card_encrypted['encryptedCVV'] : '';
         $payment->payment_method = 'BANKCARD';
         $paymentRequest->payment = $payment;
 
         $http_body = $paymentRequest->toJson();
-        error_log(message: "http_body: \n" . $http_body);
-
-        //sign
         $signStr = $this->paykkaSign($PAYKKA_MERCHANT_ID, $timestamp, $http_body, $PAYKKA_API_KEY);
-
-        error_log("signStr: \n" . $signStr);
-        // 定义请求头
         $headers = array(
-            'Content-Type' => 'application/json', // 设置内容类型为 JSON
+            'Content-Type' => 'application/json',
             'signature' => $signStr,
-            'type' => 'RSA256' // 添加认证头
+            'type' => 'RSA256'
         );
-
-        $response = wp_remote_post('https://pub-fat.eu.paykka.com/apis/payments', array(
-            // $response = wp_remote_post('http://localhost:8080/apis/session', array(
-            // $response = wp_remote_post('https://sandbox.aq.paykka.com/apis/session', array(
+        $api_base = $this->getPaykkaApiBaseUrl();
+        $response = wp_remote_post($api_base . '/apis/payments', array(
             'headers' => $headers,
             'body' => $http_body,
             'timeout' => 16,
         ));
-
-        // error_log("response: \n", $http_body);
-
-        // 检查请求是否出错
         if (is_wp_error($response)) {
             wc_add_notice('Payment error: ' . $response->get_error_message(), 'error');
             return;
         }
-
         $response_body = wp_remote_retrieve_body($response);
         $response_data = json_decode($response_body, true);
-
-        error_log("response_body: \n" . $response_body);
-
-        // echo '<script>console.log("回调准备' . $data . '")</script>';
+        $http_code = wp_remote_retrieve_response_code($response);
+        $this->logPaykkaResult('CardPayment', $api_base . '/apis/payments', $http_code, $response_body, $http_body);
         return $response_data;
     }
 
@@ -277,44 +294,85 @@ class PaykkaRequestHandler
         $paymentRequest->payment = $payment;
 
         $http_body = $paymentRequest->toJson();
-        error_log(message: "http_body: \n" . $http_body);
-
-        //sign
         $signStr = $this->paykkaSign($PAYKKA_MERCHANT_ID, $timestamp, $http_body, $PAYKKA_API_KEY);
-
-        error_log("signStr: \n" . $signStr);
-        // 定义请求头
         $headers = array(
-            'Content-Type' => 'application/json', // 设置内容类型为 JSON
+            'Content-Type' => 'application/json',
             'signature' => $signStr,
-            'type' => 'RSA256' // 添加认证头
+            'type' => 'RSA256'
         );
-
-        $response = wp_remote_post('https://pub-fat.eu.paykka.com/apis/payments', array(
-            // $response = wp_remote_post('http://localhost:8080/apis/session', array(
-            // $response = wp_remote_post('https://sandbox.aq.paykka.com/apis/session', array(
+        $api_base = $this->getPaykkaApiBaseUrl();
+        $response = wp_remote_post($api_base . '/apis/payments', array(
             'headers' => $headers,
             'body' => $http_body,
             'timeout' => 16,
         ));
-
-        // error_log("response: \n", $http_body);
-
-        // 检查请求是否出错
         if (is_wp_error($response)) {
             wc_add_notice('Payment error: ' . $response->get_error_message(), 'error');
             return;
         }
-
         $response_body = wp_remote_retrieve_body($response);
         $response_data = json_decode($response_body, true);
-
-        error_log("response_body: \n" . $response_body);
-
-        // echo '<script>console.log("回调准备' . $data . '")</script>';
+        $http_code = wp_remote_retrieve_response_code($response);
+        $this->logPaykkaResult('GooglePay', $api_base . '/apis/payments', $http_code, $response_body, $http_body);
         return $response_data;
     }
 
+    /**
+     * 打印 Paykka 请求结果到 error_log（便于排查）
+     * 当 WP_DEBUG 或 WP_DEBUG_LOG 为 true，或后台勾选「记录请求结果日志」时输出。
+     *
+     * @param string $api_name      接口名称，如 Session / CardPayment / GooglePay
+     * @param string $request_url  请求完整 URL
+     * @param int    $http_code    HTTP 状态码
+     * @param string $response_body 响应体
+     * @param string $request_body  请求体（仅在开启日志时输出，敏感信息注意）
+     */
+    private function logPaykkaResult($api_name, $request_url, $http_code, $response_body, $request_body = '')
+    {
+        if (!function_exists('paykka_is_log_enabled') || !paykka_is_log_enabled()) {
+            return;
+        }
+        error_log('[Paykka] === ' . $api_name . ' ===');
+        error_log('[Paykka] Request URL: ' . $request_url);
+        error_log('[Paykka] HTTP Code: ' . (string) $http_code);
+        error_log('[Paykka] Response: ' . (string) $response_body);
+        if ($request_body !== '') {
+            error_log('[Paykka] Request Body: ' . $request_body);
+        }
+    }
+
+    /**
+     * 根据沙箱开关返回 Paykka API 基地址（不含路径）
+     *
+     * @return string
+     */
+    private function getPaykkaApiBaseUrl()
+    {
+        $sandbox = get_option('paykka_sandbox_flag') === 'yes';
+        if ($sandbox) {
+            return 'https://pub-fat.eu.paykka.com';
+        }
+        $custom = get_option('paykka_api_base_url', '');
+        if (is_string($custom) && $custom !== '') {
+            return rtrim($custom, '/');
+        }
+        return 'https://pub-fat.eu.paykka.com';
+    }
+
+    /**
+     * Paykka API 要求 bill.areaCode / shipping.areaCode 长度为 0-10
+     *
+     * @param string|null $value
+     * @return string
+     */
+    private function truncateAreaCode($value)
+    {
+        if ($value === null || $value === '') {
+            return '';
+        }
+        $s = is_string($value) ? $value : (string) $value;
+        return substr($s, 0, 10);
+    }
 
     private function buildBill($order)
     {
@@ -330,15 +388,14 @@ class PaykkaRequestHandler
         $bill->postal_code = $order->get_billing_postcode();
 
         $bill->email = $order->get_billing_email();
-        // $bill->area_code = $order->get_billing_phone();
-        // $bill->phone_number = $order->get_billing_phone();
         $bill_phone_number = $order->get_billing_phone();
+        $bill->area_code = '';
+        $bill->phone_number = '';
         if (!empty($bill_phone_number)) {
-            $phone_parts = explode(' ', $bill_phone_number, 2);
-            $bill->area_code = $phone_parts[0] ?? '';
+            $phone_parts = explode(' ', trim($bill_phone_number), 2);
+            $bill->area_code = $this->truncateAreaCode($phone_parts[0] ?? '');
             $bill->phone_number = $phone_parts[1] ?? $bill_phone_number;
         }
-        // $bill->descriptor = $order->getdis();
         return $bill;
     }
 
@@ -356,53 +413,44 @@ class PaykkaRequestHandler
         $ship->city = $order->get_shipping_city();
         $ship->postal_code = $order->get_shipping_postcode();
 
-        // $ship->email = $order->get_billing_email();
-        // $bill->area_code = $order->get_billing_phone();
+        $ship->area_code = '';
+        $ship->phone_number = '';
         $ship_phone_number = $order->get_shipping_phone();
-        if ($ship_phone_number != null) {
-            $phone_parts = explode(' ', $ship_phone_number, 2);
-            $ship->area_code = $phone_parts[0] ?? '';
+        if ($ship_phone_number !== null && $ship_phone_number !== '') {
+            $phone_parts = explode(' ', trim($ship_phone_number), 2);
+            $ship->area_code = $this->truncateAreaCode($phone_parts[0] ?? '');
             $ship->phone_number = $phone_parts[1] ?? $ship_phone_number;
         }
-        // $ship-> phone_number = $order->get_shipping_phone();
-        // $ship-> shipping_email = $order->get_shipping_email();
-        // $bill->descriptor = $order->getdis();
         return $ship;
     }
 
     private function buildCustomer($order)
     {
-        $user = wp_get_current_user();
-
         $customer = new PayCustomer();
         $customer->id = $order->get_user_id();
-        // $customer->registration_time  = $user->user_registered;  
-        // $customer->email = $user-> ; 
-        $customer->order_ip = $order->get_customer_ip_address();
-        $customer->pay_ip = '127.0.0.1';
+        $customer->order_ip = $order->get_customer_ip_address() ?: '';
+        $customer->pay_ip = $order->get_customer_ip_address() ?: '127.0.0.1';
         return $customer;
     }
 
     private function buildGoodsItems($order)
     {
-
         $decimal_places = get_option('woocommerce_price_num_decimals', 2);
-        $goods_items = [];
+        $goods_items = array();
         foreach ($order->get_items() as $item_id => $item) {
             $product = $item->get_product();
+            if (!$product || !is_a($product, 'WC_Product')) {
+                continue;
+            }
             $goods = new Goods();
-
             $goods->id = $product->get_id();
             $goods->name = $product->get_name();
             $goods->description = $product->get_description();
-            // $goods->category =   wp_get_post_terms($goods->id, 'product_cat');
-            // $goods-> brand = $item->get_name();
             $goods->link = $product->get_permalink();
             $goods->price = intval(round($product->get_price() * pow(10, $decimal_places)));
             $goods->quantity = $item->get_quantity();
             $goods->delivery_date = $product->get_meta('_delivery_date');
             $goods->picture_url = get_post_meta($goods->id, '_picture_url', true);
-
             $goods_items[] = $goods;
         }
         return $goods_items;
@@ -410,87 +458,94 @@ class PaykkaRequestHandler
 
 
     /**
-     * 下单签名
+     * V3 签名（收银台等 v3 接口）
+     * 文档: https://docs.paykka.com/zh-hans/payments/apis/introduction/api-certification
+     * 签名串：HTTP方法\nURL路径\n时间戳\n随机串\n请求报文主体（每行以 \n 结束，参数为空也需 \n）
+     *
+     * @param string $method      如 POST
+     * @param string $request_path 如 /v3/payment/acq/session（不含域名，无查询参数则不拼 ?）
+     * @param string $timestamp   毫秒时间戳
+     * @param string $nonce       防重放随机串
+     * @param string $body        请求体 JSON 字符串
+     * @param string $private_key 商户私钥（PEM 或裸 base64）
+     * @return string|null 签名值（Base64 + URLEncode），失败返回 null
+     */
+    public function paykkaSignV3($method, $request_path, $timestamp, $nonce, $body, $private_key)
+    {
+        $method = $method !== '' ? $method : ' ';
+        $request_path = $request_path !== '' ? $request_path : ' ';
+        $timestamp = (string) $timestamp;
+        $nonce = $nonce !== '' ? $nonce : ' ';
+        $body = $body !== null && $body !== '' ? $body : ' ';
+
+        $content = $method . "\n" . $request_path . "\n" . $timestamp . "\n" . $nonce . "\n" . $body;
+
+        $pem = $this->normalizePrivateKeyPem($private_key);
+        if ($pem === null) {
+            return null;
+        }
+
+        $key = openssl_pkey_get_private($pem);
+        if ($key === false) {
+            if (function_exists('paykka_is_debug') && paykka_is_debug()) {
+                while ($err = openssl_error_string()) {
+                    error_log('[Paykka] ' . $err);
+                }
+            }
+            return null;
+        }
+
+        $signature = '';
+        $ok = openssl_sign($content, $signature, $key, OPENSSL_ALGO_SHA256);
+        openssl_free_key($key);
+        if (!$ok || $signature === '') {
+            return null;
+        }
+
+        $base64 = base64_encode($signature);
+        return rawurlencode($base64);
+    }
+
+    /**
+     * 将私钥转为 PEM 字符串
+     */
+    private function normalizePrivateKeyPem($key)
+    {
+        $key = trim($key);
+        if ($key === '') {
+            return null;
+        }
+        if (strpos($key, '-----BEGIN') === 0) {
+            return $key;
+        }
+        return "-----BEGIN PRIVATE KEY-----\n" . chunk_split(str_replace(array("\r", "\n", " "), '', $key), 64, "\n") . "-----END PRIVATE KEY-----\n";
+    }
+
+    /**
+     * 旧版签名（v1/非 v3 接口如 /apis/payments 等如仍使用可保留）
      */
     public function paykkaSign($merchantId, $timestamp, $requestBody, $PAYKKA_API_KEY)
     {
-        // 签名格式
-        $FORMAT = "merchantId=%s&timestamp=%s&requestBody=%s";
-
-        // 生成签名字符串
-        $content = sprintf($FORMAT, $merchantId, $timestamp, $requestBody);
-
-        // 加载私钥
-        // $PAYKKA_API_KEY = $this -> privateKeyStr;
-        // error_log("response: \n" .$PAYKKA_API_KEY);
-        $api_key = null;
-        if (strpos($PAYKKA_API_KEY, '-----BEGIN') === 0) {
-            $api_key = $PAYKKA_API_KEY;
-        } else {
-            // 格式化密钥为 PEM
-            $formatted_key = "-----BEGIN PRIVATE KEY-----\n";
-            $formatted_key .= chunk_split($PAYKKA_API_KEY, 64, "\n");
-            $formatted_key .= "-----END PRIVATE KEY-----\n";
-
-            $api_key = $formatted_key;
+        $content = sprintf("merchantId=%s&timestamp=%s&requestBody=%s", $merchantId, $timestamp, $requestBody);
+        $pem = $this->normalizePrivateKeyPem($PAYKKA_API_KEY);
+        if ($pem === null) {
+            return '';
         }
-
-
-        $privateKey = openssl_pkey_get_private($api_key);
+        $privateKey = openssl_pkey_get_private($pem);
         if (!$privateKey) {
-            while ($error = openssl_error_string()) {
-                error_log($error);
+            if (function_exists('paykka_is_debug') && paykka_is_debug()) {
+                while ($error = openssl_error_string()) {
+                    error_log($error);
+                }
             }
-            die("无法加载私钥" . $api_key);
+            return '';
         }
-
         $signature = null;
-
-        // 3. 使用 SHA256withRSA 签名
         openssl_sign($content, $signature, $privateKey, OPENSSL_ALGO_SHA256);
-        if ($signature === false) {
-            die("签名失败");
-        }
-
-        // 释放私钥资源
         openssl_free_key($privateKey);
-
-        // Base64 编码签名
-        $base64Signature = base64_encode($signature);
-
-        // URL 编码签名
-        $sign = urlencode($base64Signature);
-
-        return $sign;
+        if ($signature === false) {
+            return '';
+        }
+        return rawurlencode(base64_encode($signature));
     }
-
-    public $privateKeyStr = "-----BEGIN PRIVATE KEY-----
-MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQCtqnN9oApv8mwf
-RdhT6Ka35msbuq1YsWcHoWyAPs1p1QSz3CA+ZdwrAMFoauZuoE2nnZjG13Hd1CmJ
-fBNLGBQxKFfYwGzJBPBb3AoU5ejCk8dV5adPcWvfZMdEm3gcDn/dQ0PrZi4sKzZ3/
-ibxQMg8LJST3E3e/HnetoC0lGMhBVnmfwmVbBw5dEmOZJ/5rCJ9776Uljj6YpVva
-GfSUwCcbrwdzMuJXxSxnWWsuAGbGVyP+gwwWe8pGF5v2V+cIAfIVDDeXoq/jggc8
-1uul6unqZFAa2dSYvTWMla43CaOEqD158OsHG9HPGCVtjJsm+0VmfkzFTBzrYL+q
-Llbp/bPAgMBAAECggEBAJXo2SDMEbZo0SR9qitkXOXKJRMepZw2JvXTRlG95JtCon
-iPv9WdH9yPHmUAQkGkZuQVile6ijQufFyNminscyGr7YjRMhakCMeCvcEkZTPxVN
-S1FSPiiHeiCtESUzAE5CMfeXWuEpVWCAK0hPEkNrSa1vZ76UxfLOQvLhKzNI6/Hu
-47IW+YvqoK38rJ2NIQOdECuKa6CaTRuPxndkJXTF+iZiXDc9wYm6PmtVSfUKL2TD
-GpWXtZnO4n7YuZqgECkcdgnY1hHiqKPmnhtsjKGFf8rw1SfH8tXqZHOY1rGXOlVq
-7FD89sUYZsBd15TlEURp/XrvsKaKW1fFc02y2mMIECgYEA4YnpwBciqWYadWibEy
-Aj431tBdCnega1C1GajE+36HBcikBKpt7rYuezrYIyNrZKTUTcjvCdyxypJJDNQk
-5fDcF8LxKkXdkx0x7S4IbvG4Xa8qFBpcIompA6Kt6z9wKYYvQKbCKUU/pt1L6JiG
-fjP5EuI/p/X1z8uaUz+9DS0d8CgYEAxR8DTi/rJq5PRIKQkhAsgvus3vzdmk2Ig+F
-PI74PXKJiNeIGvhcp04IdTRpNJj0E2/WsHAta8CeQUNNEazvZePok7ms83YwgLis
-I0f3JiZ/bS2c03J3Zc1zXI1eFNgMzrLYhxP2hOe6s7oT7fDHH3aD0rjOQpC4RM0p
-awUJ+2RECgYB89sUlQaxa38/ZLdR+jFhWO7CkgC/LVNwLIXPYOnNTvq4HjAfQ3cL
-eUjMj9/eKiQYyOe1a5ccIOyEcuX6BNptEK+h6zIF13lnU+EcvUJQ7U7c0qFSPWzzU
-JwWTq0Fbo3x7l2wO7jnxLdic/9WEVst69R3zoV/hnswIsJhU9idZUQKBgQCIYceo
-rfC1R36ieO9Lj5MsYLKfaTZtTt132UgnA5WfUt4+R47AsEgJBYn+UYc1QJx/Dv+w
-O48Ef2sS8MjypGr3j6JDrsBizFNrfezRVRS+enKAPfzN8wyDC6Xx1tjcoOR8x1qf
-75c//Ml7EVjp+Ys95OHFMPoPDaxq3zPhaH9Y8QKBgGT7cQcG7+WeiYy9+FtVHGyh
-CZoxF8Sdq6RmLeObVXC1o2XcpPGT9OJOJR/HvWkzB5IU/dnhPxI394SLvXExGR0J
-syf1fUNx3dH3QG6+leWiaqPkta2a2KbtdkhM7Omei58qhJ1EEB7oJWc/KNdGFXPq
-E+WaihZES15+4j26Qa+o
------END PRIVATE KEY-----";
-
 }
