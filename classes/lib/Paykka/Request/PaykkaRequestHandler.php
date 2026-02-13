@@ -342,12 +342,15 @@ class PaykkaRequestHandler
     }
 
     /**
-     * 根据沙箱开关返回 Paykka API 基地址（不含路径）
+     * 根据沙箱/生产配置返回 Paykka 后端 API 基地址（生产环境走生产域名）
      *
      * @return string
      */
     private function getPaykkaApiBaseUrl()
     {
+        if (function_exists('paykka_get_api_base_url')) {
+            return paykka_get_api_base_url();
+        }
         $sandbox = get_option('paykka_sandbox_flag') === 'yes';
         if ($sandbox) {
             return 'https://pub-fat.eu.paykka.com';
@@ -356,7 +359,7 @@ class PaykkaRequestHandler
         if (is_string($custom) && $custom !== '') {
             return rtrim($custom, '/');
         }
-        return 'https://pub-fat.eu.paykka.com';
+        return 'https://pub.eu.paykka.com';
     }
 
     /**

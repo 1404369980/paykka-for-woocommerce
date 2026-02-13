@@ -1,11 +1,12 @@
 <?php
 if (!defined('ABSPATH')) {
-    exit; // 确保安全性
-} ?>
-
-<!-- 通过插入样式和脚本来显示支付组件 -->
-<link href="https://checkout-fat.eu.paykka.com/cp/style.css" rel="stylesheet" />
-<script type="text/javascript" src="https://checkout-fat.eu.paykka.com/cp/card-checkout-ui.js"></script>
+    exit;
+}
+$paykka_checkout_base = function_exists('paykka_get_checkout_base_url') ? paykka_get_checkout_base_url() : 'https://checkout-fat.eu.paykka.com';
+?>
+<!-- 通过插入样式和脚本来显示支付组件（根据沙箱/生产自动切换） -->
+<link href="<?php echo esc_url($paykka_checkout_base); ?>/cp/style.css" rel="stylesheet" />
+<script type="text/javascript" src="<?php echo esc_url($paykka_checkout_base); ?>/cp/card-checkout-ui.js"></script>
 
 <div class="shop-content">
     <!-- 这里插入支付组件 -->
@@ -45,8 +46,8 @@ if (!defined('ABSPATH')) {
             // env: 'sandbox',
         })
 
-        setApiUrl('https://checkout-fat.eu.paykka.com')
-        setCDNUrl('https://checkout-fat.eu.paykka.com/cp')
+        setApiUrl('<?php echo esc_js($paykka_checkout_base); ?>')
+        setCDNUrl('<?php echo esc_js($paykka_checkout_base); ?>/cp')
         
         setFraudDetectionEnv({
             SR: 'pk_test_51QaC2P5VarcojPHdg13yagk5TqrGkIkeK8I21BgQUZe8BzyRmbtmOg3dKsXjkxt6JlsjyjJMTvBH9dFMCZWRxOkt00tWQ1eHFU'

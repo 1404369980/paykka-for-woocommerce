@@ -1,11 +1,12 @@
 <?php
 if (!defined('ABSPATH')) {
-    exit; // 确保安全性
-} ?>
-
-<!-- 通过插入样式和脚本来显示支付组件 -->
-<link href="https://checkout-fat.eu.paykka.com/cp/style.css" rel="stylesheet" />
-<script type="text/javascript" src="https://checkout-fat.eu.paykka.com/cp/card-checkout-ui.js"></script>
+    exit;
+}
+$paykka_checkout_base = function_exists('paykka_get_checkout_base_url') ? paykka_get_checkout_base_url() : 'https://checkout-fat.eu.paykka.com';
+?>
+<!-- 根据沙箱/生产自动切换收银台地址 -->
+<link href="<?php echo esc_url($paykka_checkout_base); ?>/cp/style.css" rel="stylesheet" />
+<script type="text/javascript" src="<?php echo esc_url($paykka_checkout_base); ?>/cp/card-checkout-ui.js"></script>
 
 <div class="shop-content">
     <!-- 这里插入支付组件 -->
@@ -38,8 +39,8 @@ if (!defined('ABSPATH')) {
 
         const { Card, ApplePay, GooglePay, setFraudDetectionEnv, PayKKaCheckout, setApiUrl, setCDNUrl } = PayKKaCardCheckoutUI;
 
-        setApiUrl('https://checkout-fat.eu.paykka.com')
-        setCDNUrl('https://checkout-fat.eu.paykka.com/cp')
+        setApiUrl('<?php echo esc_js($paykka_checkout_base); ?>')
+        setCDNUrl('<?php echo esc_js($paykka_checkout_base); ?>/cp')
 
         const paykkaCheckout = new PayKKaCheckout({
             sessionId: '<?php echo esc_html(WC()->session->get('paykka_session_id')) ?>',

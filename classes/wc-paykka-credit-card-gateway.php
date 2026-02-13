@@ -244,7 +244,9 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
                     [
                         'title' => 'Sandbox',
                         'type' => 'checkbox',
-                        'id' => 'paykka_sandbox_flag'
+                        'id' => 'paykka_sandbox_flag',
+                        'desc_tip' => true,
+                        'description' => __('未勾选为生产、勾选为测试。可通过 paykka-config.php（env）或 wp-config 常量 PAYKKA_ENV 选择环境，优先级高于本勾选。', 'paykka-for-woocommerce'),
                     ],
                     [
                         'title' => 'Sandbox Public Key',
@@ -301,6 +303,34 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
                         'id' => 'paykka_client_key'
                     ],
                     [
+                        'title'   => __('API 地区', 'paykka-for-woocommerce'),
+                        'type'    => 'select',
+                        'id'      => 'paykka_api_region',
+                        'default' => 'eu',
+                        'options' => array(
+                            'eu' => __('欧洲地区 (https://openapi.eu.paykka.com)', 'paykka-for-woocommerce'),
+                            'ap' => __('亚太地区 (https://openapi.paykka.com)', 'paykka-for-woocommerce'),
+                        ),
+                        'desc_tip' => true,
+                        'description' => __('后端 API 调用使用的区域。亚太与欧洲使用不同域名，请与 Paykka 账户所在区域一致。', 'paykka-for-woocommerce'),
+                    ],
+                    [
+                        'title'   => __('API Base URL（可选）', 'paykka-for-woocommerce'),
+                        'type'    => 'text',
+                        'id'      => 'paykka_api_base_url',
+                        'default' => '',
+                        'desc_tip' => true,
+                        'description' => __('不填则按「API 地区」+ 生产/测试自动切换；也可在 paykka-config.php 中配置 production/sandbox.api_base_url。', 'paykka-for-woocommerce'),
+                    ],
+                    [
+                        'title'   => __('Checkout Base URL（可选）', 'paykka-for-woocommerce'),
+                        'type'    => 'text',
+                        'id'      => 'paykka_checkout_base_url',
+                        'default' => '',
+                        'desc_tip' => true,
+                        'description' => __('不填则按生产/测试自动切换；也可在 paykka-config.php 中配置 production/sandbox.checkout_base_url。', 'paykka-for-woocommerce'),
+                    ],
+                    [
                         'type' => 'sectionend',
                         'id' => 'paykka_standard_end'
                     ]
@@ -352,11 +382,11 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
                         'id'      => 'paykka_payment_mode',
                         'default' => 'hosted',
                         'options' => array(
-                            'hosted'         => __('Hosted 收银台（跳转 Paykka 收银台）', 'paykka-for-woocommerce'),
-                            'dropin'         => __('Drop-in 卡片（站内 Drop-in 页面）', 'paykka-for-woocommerce'),
-                            'embedded'       => __('Component / Accordion（站内组件页）', 'paykka-for-woocommerce'),
-                            'encrypted_card' => __('Encrypted Card（站内加密卡页）', 'paykka-for-woocommerce'),
-                            'google_pay'     => __('Google Pay', 'paykka-for-woocommerce'),
+                            'hosted'           => __('Hosted 收银台（跳转 Paykka 收银台）', 'paykka-for-woocommerce'),
+                            'dropin'           => __('Drop-in 卡片（站内 Drop-in 页面）', 'paykka-for-woocommerce'),
+                            'embedded'         => __('Component / Accordion（站内组件页）', 'paykka-for-woocommerce'),
+                            'encrypted_card'   => __('Encrypted Card（站内加密卡页）', 'paykka-for-woocommerce'),
+                            'google_pay'       => __('Google Pay', 'paykka-for-woocommerce'),
                         ),
                         'desc_tip' => true,
                         'description' => __('选定后，所有选择 Paykka 的订单均按此模式处理。', 'paykka-for-woocommerce'),
@@ -412,11 +442,11 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
     {
         $mode = get_option('paykka_payment_mode', 'hosted');
         $titles = array(
-            'hosted'         => __('Hosted 收银台', 'paykka-for-woocommerce'),
-            'dropin'         => __('Drop-in 卡片', 'paykka-for-woocommerce'),
-            'embedded'       => __('Component', 'paykka-for-woocommerce'),
-            'encrypted_card' => __('Encrypted Card', 'paykka-for-woocommerce'),
-            'google_pay'     => __('Google Pay', 'paykka-for-woocommerce'),
+            'hosted'           => __('Hosted 收银台', 'paykka-for-woocommerce'),
+            'dropin'           => __('Drop-in 卡片', 'paykka-for-woocommerce'),
+            'embedded'         => __('Component', 'paykka-for-woocommerce'),
+            'encrypted_card'   => __('Encrypted Card', 'paykka-for-woocommerce'),
+            'google_pay'       => __('Google Pay', 'paykka-for-woocommerce'),
         );
         if (!isset($titles[$mode])) {
             $mode = 'hosted';
@@ -424,18 +454,12 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
         return array(array('id' => $mode, 'title' => $titles[$mode]));
     }
 
-    /**
-     * 结账页不展示子方式选择，仅显示网关标题与描述（与 PayPal 一致）
-     */
     public function payment_fields()
     {
-        // 无额外表单项，顾客只看到「Paykka」一项支付方式
     }
 
     public function payment_scripts()
     {
-
-        // echo '<script>console.log("准备下单")</script>';
     }
 
     public function validate_fields()
@@ -463,7 +487,7 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
             return array('result' => 'failure', 'message' => __('Invalid order', 'paykka-for-woocommerce'));
         }
 
-        $method = get_option('paykka_payment_mode', 'hosted');
+        $method = strtolower(trim((string) get_option('paykka_payment_mode', 'hosted')));
         $order->update_meta_data('_paykka_sub_method', $method);
         $order->save();
 
@@ -492,6 +516,14 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
         }
         if ($method === 'google_pay') {
             return $this->process_payment_google_pay($order_id, $paykkaPaymentHelper);
+        }
+
+        // 未识别的模式（如选项未保存或被篡改）时按 hosted 处理
+        $valid_methods = array('hosted', 'dropin', 'embedded', 'encrypted_card', 'google_pay');
+        if (!in_array($method, $valid_methods, true)) {
+            $method = 'hosted';
+            ob_end_clean();
+            return $this->process_payment_hosted($order, $order_id, $paykkaPaymentHelper);
         }
 
         ob_end_clean();
