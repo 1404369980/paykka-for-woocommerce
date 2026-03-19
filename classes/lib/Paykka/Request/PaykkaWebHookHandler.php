@@ -47,7 +47,7 @@ class PaykkaWebHookHandler
     // 处理 Webhook 数据
     public function process_payment_webhook($webHookOrder)
     {
-        if (!is_array($webHookOrder) || empty($webHookOrder['trans_id']) || empty($webHookOrder['status'])) {
+        if (!is_array($webHookOrder) || empty($webHookOrder['trans_id'])) {
             if (function_exists('paykka_is_debug') && paykka_is_debug()) {
                 error_log('[Paykka Webhook] Invalid payload: ' . wp_json_encode($webHookOrder));
             }
@@ -55,7 +55,7 @@ class PaykkaWebHookHandler
         }
 
         $order_id = $webHookOrder['trans_id'];
-        $payment_status = $webHookOrder['status'];
+        $payment_status = isset($webHookOrder['status']) ? (string) $webHookOrder['status'] : '';
 
         $order = wc_get_order($order_id);
         if (!$order || !$order->get_id()) {
@@ -65,22 +65,41 @@ class PaykkaWebHookHandler
             return;
         }
 
-        $current_status = $order->get_status();
-        if (in_array($current_status, array('processing', 'completed'), true)) {
+        require_once PAYKKA_PLUGIN_PATH . 'classes/lib/Paykka/Request/PaykkaRequestHandler.php';
+        $paykkaPaymentHelper = new PaykkaRequestHandler();
+        $query_result = $paykkaPaymentHelper->queryPayment((string) $order_id, '', '');
+        if (is_array($query_result) && isset($query_result['ret_code']) && $query_result['ret_code'] === '000000') {
+            $paykkaPaymentHelper->syncOrderByQueryResult($order, $query_result, 'webhook');
             return;
+        }
+
+        if (!empty($webHookOrder['order_id'])) {
+            $order->update_meta_data('_paykka_order_id', sanitize_text_field((string) $webHookOrder['order_id']));
+            $order->save();
+        }
+
+        if (function_exists('paykka_is_debug') && paykka_is_debug()) {
+            error_log('[Paykka Webhook] Query failed fallback to payload status. order_id=' . $order_id . ' query=' . wp_json_encode($query_result));
         }
         switch ($payment_status) {
             case 'SUCCESS':
-            case 'AUTHORIZED':
                 $order->payment_complete();
                 break;
+            case 'AUTHORIZED':
+                $order->update_status('on-hold', 'PayKKa authorized, awaiting capture.');
+                break;
             case 'FAILURE':
+            case 'CANCELED':
                 $order->update_status('failed', 'Payment Failed');
                 break;
             case 'REFUNDED':
                 $order->update_status('refunded', 'Payment Refunded');
                 break;
             default:
+                if ($payment_status === '') {
+                    $order->add_order_note('PayKKa webhook received without status, query failed.');
+                    break;
+                }
                 if (function_exists('paykka_is_debug') && paykka_is_debug()) {
                     error_log('[Paykka Webhook] Unhandled status: ' . $payment_status);
                 }

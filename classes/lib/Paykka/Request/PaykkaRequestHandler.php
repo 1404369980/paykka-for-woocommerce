@@ -161,6 +161,195 @@ class PaykkaRequestHandler
         );
     }
 
+    /**
+     * 交易查询（v3）
+     * 文档: https://docs.paykka.com/zh-hans/payments/apis/payments/openapi/交易/payments-query-opl_1
+     * 接口: POST /v3/payment/acq/query
+     *
+     * @param string $trans_id  商户订单号（Woo 订单号）
+     * @param string $order_id  PayKKa 订单号
+     * @param string $session_id PayKKa 收银台 ID
+     * @return array
+     */
+    public function queryPayment($trans_id = '', $order_id = '', $session_id = '')
+    {
+        $trans_id = trim((string) $trans_id);
+        $order_id = trim((string) $order_id);
+        $session_id = trim((string) $session_id);
+        if ($trans_id === '' && $order_id === '' && $session_id === '') {
+            return array('ret_code' => '400', 'ret_msg' => 'Missing query identifiers');
+        }
+
+        $paykkaSettings = getPaykkaSettings();
+        $merchant_id = $paykkaSettings['paykka_merchant_id'];
+        $private_key = $paykkaSettings['paykka_private_key'];
+        $sandbox = get_option('paykka_sandbox_flag') === 'yes';
+        $app_id = $sandbox ? get_option('paykka_sandbox_app_id', '') : get_option('paykka_app_id', '');
+        if ($app_id === '') {
+            $app_id = $merchant_id;
+        }
+
+        $payload = array('merchant_id' => $merchant_id);
+        if ($trans_id !== '') {
+            $payload['trans_id'] = $trans_id;
+        }
+        if ($order_id !== '') {
+            $payload['order_id'] = $order_id;
+        }
+        if ($session_id !== '') {
+            $payload['session_id'] = $session_id;
+        }
+
+        $timestamp = (string) round(microtime(true) * 1000);
+        $nonce = (string) wp_rand(1000000000000000, 9999999999999999);
+        $http_body = wp_json_encode($payload);
+        if (!is_string($http_body) || $http_body === '') {
+            return array('ret_code' => '500', 'ret_msg' => 'Invalid query payload');
+        }
+
+        $request_path = '/v3/payment/acq/query';
+        $signStr = $this->paykkaSignV3('POST', $request_path, $timestamp, $nonce, $http_body, $private_key);
+        if ($signStr === null) {
+            return array('ret_code' => '500', 'ret_msg' => 'Query signature error');
+        }
+
+        $headers = array(
+            'Content-Type'       => 'application/json',
+            'x-paykka-appid'     => $app_id,
+            'x-paykka-timestamp' => $timestamp,
+            'x-paykka-nonce'     => $nonce,
+            'x-paykka-sign-alg'  => 'SHA256_WITH_RSA',
+            'x-paykka-sign'      => $signStr,
+        );
+
+        $api_base = $this->getPaykkaApiBaseUrl();
+        $response = wp_remote_post($api_base . $request_path, array(
+            'headers' => $headers,
+            'body' => $http_body,
+            'timeout' => 16,
+        ));
+        if (is_wp_error($response)) {
+            return array(
+                'ret_code' => 'WP_ERROR',
+                'ret_msg' => $response->get_error_message(),
+            );
+        }
+
+        $response_body = wp_remote_retrieve_body($response);
+        $response_data = json_decode($response_body, true);
+        $http_code = wp_remote_retrieve_response_code($response);
+        $this->logPaykkaResult('PaymentQuery', $api_base . $request_path, $http_code, $response_body, $http_body);
+
+        if ($http_code === 200 && is_array($response_data)) {
+            $ret_code = isset($response_data['ret_code']) ? (string) $response_data['ret_code'] : '';
+            $error_code = isset($response_data['error_code']) ? (string) $response_data['error_code'] : '';
+            if ($ret_code !== '' && $ret_code !== '0' && $ret_code !== '000000') {
+                return array(
+                    'ret_code' => $ret_code,
+                    'ret_msg'  => isset($response_data['ret_msg']) ? (string) $response_data['ret_msg'] : __('Query failed', 'paykka-for-woocommerce'),
+                    'data'     => $response_data,
+                );
+            }
+            if ($error_code !== '' && $error_code !== '0' && $error_code !== '000000') {
+                return array(
+                    'ret_code' => $error_code,
+                    'ret_msg'  => isset($response_data['error_description']) ? (string) $response_data['error_description'] : __('Query failed', 'paykka-for-woocommerce'),
+                    'data'     => $response_data,
+                );
+            }
+            $query_data = isset($response_data['data']) && is_array($response_data['data']) ? $response_data['data'] : array();
+            $result = array_merge(
+                array(
+                    'ret_code' => '000000',
+                    'ret_msg' => isset($response_data['ret_msg']) ? (string) $response_data['ret_msg'] : '',
+                ),
+                $query_data
+            );
+            $result['raw'] = $response_data;
+            return $result;
+        }
+
+        if (is_array($response_data) && isset($response_data['ret_code'])) {
+            return $response_data;
+        }
+        return array(
+            'ret_code' => (string) $http_code,
+            'ret_msg'  => is_array($response_data) && isset($response_data['ret_msg']) ? (string) $response_data['ret_msg'] : (string) $response_body,
+        );
+    }
+
+    /**
+     * 根据查询结果同步 Woo 订单状态，并写入 PayKKa 订单号（若有）
+     *
+     * @param \WC_Order $order
+     * @param array     $query_result
+     * @param string    $source 备注来源：callback / webhook
+     * @return void
+     */
+    public function syncOrderByQueryResult($order, $query_result, $source = '')
+    {
+        if (!$order || !is_a($order, 'WC_Order') || !is_array($query_result)) {
+            return;
+        }
+
+        $status = '';
+        if (isset($query_result['status'])) {
+            $status = strtoupper((string) $query_result['status']);
+        } elseif (isset($query_result['data']['status'])) {
+            $status = strtoupper((string) $query_result['data']['status']);
+        }
+
+        $paykka_order_id = '';
+        if (!empty($query_result['order_id'])) {
+            $paykka_order_id = (string) $query_result['order_id'];
+        } elseif (!empty($query_result['data']['order_id'])) {
+            $paykka_order_id = (string) $query_result['data']['order_id'];
+        }
+        if ($paykka_order_id !== '') {
+            $order->update_meta_data('_paykka_order_id', sanitize_text_field($paykka_order_id));
+        }
+        switch ($status) {
+            case 'SUCCESS':
+                if (!in_array($order->get_status(), array('processing', 'completed'), true)) {
+                    $order->payment_complete();
+                }
+                break;
+            case 'PROCESSING':
+                if (!in_array($order->get_status(), array('processing', 'completed', 'on-hold'), true)) {
+                    $order->update_status('on-hold', 'PayKKa status: PROCESSING');
+                } else {
+                    $order->add_order_note('PayKKa status: PROCESSING' . ($source !== '' ? ' (' . $source . ')' : ''));
+                }
+                break;
+            case 'AUTHORIZED':
+                if (!in_array($order->get_status(), array('processing', 'completed', 'on-hold'), true)) {
+                    $order->update_status('on-hold', 'PayKKa authorized, awaiting capture.');
+                }
+                break;
+            case 'FAILURE':
+                $order->update_status('failed', 'PayKKa status: FAILURE');
+                break;
+            case 'CANCELED':
+                $order->update_status('cancelled', 'PayKKa status: CANCELED');
+                break;
+            case 'REFUNDED':
+                $order->update_status('refunded', 'PayKKa status: REFUNDED');
+                break;
+            case 'PARTIALLY_REFUNDED':
+                $order->add_order_note('PayKKa status: PARTIALLY_REFUNDED' . ($source !== '' ? ' (' . $source . ')' : ''));
+                break;
+            case 'PARTIALLY_REVERSED':
+                $order->add_order_note('PayKKa status: PARTIALLY_REVERSED' . ($source !== '' ? ' (' . $source . ')' : ''));
+                break;
+            default:
+                if ($status !== '') {
+                    $order->add_order_note('PayKKa status: ' . $status . ($source !== '' ? ' (' . $source . ')' : ''));
+                }
+                break;
+        }
+        $order->save();
+    }
+
 
     public function handlerCardPayment($order, $card_encrypted_data)
     {
@@ -392,9 +581,15 @@ class PaykkaRequestHandler
         $bill->area_code = '';
         $bill->phone_number = '';
         if (!empty($bill_phone_number)) {
-            $phone_parts = explode(' ', trim($bill_phone_number), 2);
-            $bill->area_code = $this->truncateAreaCode($phone_parts[0] ?? '');
-            $bill->phone_number = $phone_parts[1] ?? $bill_phone_number;
+            $raw_phone = trim((string) $bill_phone_number);
+            $phone_parts = preg_split('/\s+/', $raw_phone, 2);
+            if (is_array($phone_parts) && count($phone_parts) === 2 && $phone_parts[1] !== '') {
+                $bill->area_code = $this->truncateAreaCode($phone_parts[0]);
+                $bill->phone_number = $phone_parts[1];
+            } else {
+                // 未单独提供国家区号时，仅写入号码，避免把整串号码误写入 area_code
+                $bill->phone_number = $raw_phone;
+            }
         }
         return $bill;
     }
@@ -417,9 +612,15 @@ class PaykkaRequestHandler
         $ship->phone_number = '';
         $ship_phone_number = $order->get_shipping_phone();
         if ($ship_phone_number !== null && $ship_phone_number !== '') {
-            $phone_parts = explode(' ', trim($ship_phone_number), 2);
-            $ship->area_code = $this->truncateAreaCode($phone_parts[0] ?? '');
-            $ship->phone_number = $phone_parts[1] ?? $ship_phone_number;
+            $raw_phone = trim((string) $ship_phone_number);
+            $phone_parts = preg_split('/\s+/', $raw_phone, 2);
+            if (is_array($phone_parts) && count($phone_parts) === 2 && $phone_parts[1] !== '') {
+                $ship->area_code = $this->truncateAreaCode($phone_parts[0]);
+                $ship->phone_number = $phone_parts[1];
+            } else {
+                // 未单独提供国家区号时，仅写入号码，避免把整串号码误写入 area_code
+                $ship->phone_number = $raw_phone;
+            }
         }
         return $ship;
     }
