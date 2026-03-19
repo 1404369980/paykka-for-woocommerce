@@ -141,7 +141,15 @@ class Paykka_Encrypted_Card_Gateway extends WC_Payment_Gateway
         $response_data = $paykkaPaymentHelper->handlerCardPayment($order, $encrypted_card_data);
 
         if (isset($response_data['ret_code']) && $response_data['ret_code'] === '000000') {
-            $order->payment_complete();
+            if (!empty($response_data['order_id'])) {
+                $order->update_meta_data('_paykka_order_id', sanitize_text_field((string) $response_data['order_id']));
+            }
+            if (!in_array($order->get_status(), array('processing', 'completed', 'on-hold'), true)) {
+                $order->update_status('on-hold', __('PayKKa payment accepted, awaiting confirmation', 'paykka-for-woocommerce'));
+            } else {
+                $order->add_order_note(__('PayKKa payment accepted, awaiting confirmation', 'paykka-for-woocommerce'));
+            }
+            $order->save();
             return new \WP_REST_Response(array(
                 'success' => true,
                 'redirect_url' => $this->get_return_url($order)

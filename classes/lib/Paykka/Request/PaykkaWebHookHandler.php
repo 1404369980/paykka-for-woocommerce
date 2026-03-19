@@ -73,38 +73,16 @@ class PaykkaWebHookHandler
             return;
         }
 
-        if (!empty($webHookOrder['order_id'])) {
-            $order->update_meta_data('_paykka_order_id', sanitize_text_field((string) $webHookOrder['order_id']));
-            $order->save();
-        }
-
         if (function_exists('paykka_is_debug') && paykka_is_debug()) {
             error_log('[Paykka Webhook] Query failed fallback to payload status. order_id=' . $order_id . ' query=' . wp_json_encode($query_result));
         }
-        switch ($payment_status) {
-            case 'SUCCESS':
-                $order->payment_complete();
-                break;
-            case 'AUTHORIZED':
-                $order->update_status('on-hold', 'PayKKa authorized, awaiting capture.');
-                break;
-            case 'FAILURE':
-            case 'CANCELED':
-                $order->update_status('failed', 'Payment Failed');
-                break;
-            case 'REFUNDED':
-                $order->update_status('refunded', 'Payment Refunded');
-                break;
-            default:
-                if ($payment_status === '') {
-                    $order->add_order_note('PayKKa webhook received without status, query failed.');
-                    break;
-                }
-                if (function_exists('paykka_is_debug') && paykka_is_debug()) {
-                    error_log('[Paykka Webhook] Unhandled status: ' . $payment_status);
-                }
-                break;
+        $fallback_result = array(
+            'status' => $payment_status,
+        );
+        if (!empty($webHookOrder['order_id'])) {
+            $fallback_result['order_id'] = (string) $webHookOrder['order_id'];
         }
+        $paykkaPaymentHelper->syncOrderByQueryResult($order, $fallback_result, 'webhook-fallback');
     }
 
 

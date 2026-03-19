@@ -207,7 +207,15 @@ class Paykka_Drop_In_Gateway extends WC_Payment_Gateway
             throw new \Exception(__('Invalid API response', 'paykka-for-woocommerce'));
         }
         if (isset($response_data['ret_code']) && $response_data['ret_code'] === '000000') {
-            $order->payment_complete();
+            if (!empty($response_data['order_id'])) {
+                $order->update_meta_data('_paykka_order_id', sanitize_text_field((string) $response_data['order_id']));
+            }
+            if (!in_array($order->get_status(), array('processing', 'completed', 'on-hold'), true)) {
+                $order->update_status('on-hold', __('PayKKa payment accepted, awaiting confirmation', 'paykka-for-woocommerce'));
+            } else {
+                $order->add_order_note(__('PayKKa payment accepted, awaiting confirmation', 'paykka-for-woocommerce'));
+            }
+            $order->save();
             return;
         }
         $error_message = isset($response_data['ret_msg']) ? sanitize_text_field($response_data['ret_msg']) : __('Payment processing failed', 'paykka-for-woocommerce');

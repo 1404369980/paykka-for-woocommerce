@@ -257,11 +257,15 @@ class PaykkaRequestHandler
                     'data'     => $response_data,
                 );
             }
-            $query_data = isset($response_data['data']) && is_array($response_data['data']) ? $response_data['data'] : array();
+            // 兼容两种查询响应：
+            // 1) ret_code/ret_msg + data.{status,order_id...}
+            // 2) error_code/error_description + 顶层 {status,order_id...}
+            $query_data = isset($response_data['data']) && is_array($response_data['data']) ? $response_data['data'] : $response_data;
+            unset($query_data['ret_code'], $query_data['ret_msg'], $query_data['error_code'], $query_data['error_description']);
             $result = array_merge(
                 array(
                     'ret_code' => '000000',
-                    'ret_msg' => isset($response_data['ret_msg']) ? (string) $response_data['ret_msg'] : '',
+                    'ret_msg' => isset($response_data['ret_msg']) ? (string) $response_data['ret_msg'] : (isset($response_data['error_description']) ? (string) $response_data['error_description'] : ''),
                 ),
                 $query_data
             );

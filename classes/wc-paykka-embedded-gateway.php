@@ -184,8 +184,18 @@ class Paykka_Embedded_Gateway extends WC_Payment_Gateway
             wp_safe_redirect(wc_get_page_permalink('myaccount'));
             exit;
         }
-        $order->payment_complete();
-        wc_reduce_stock_levels($order_id);
+        require_once PAYKKA_PLUGIN_PATH . 'classes/lib/Paykka/Request/PaykkaRequestHandler.php';
+        $paykkaPaymentHelper = new PaykkaRequestHandler();
+        $query_result = $paykkaPaymentHelper->queryPayment((string) $order_id, '', '');
+        if (is_array($query_result) && isset($query_result['ret_code']) && $query_result['ret_code'] === '000000') {
+            $paykkaPaymentHelper->syncOrderByQueryResult($order, $query_result, 'callback');
+        } else {
+            if (function_exists('paykka_is_debug') && paykka_is_debug()) {
+                error_log('[Paykka Embedded Callback] Query failed order_id=' . $order_id . ' result=' . wp_json_encode($query_result));
+            }
+            $order->add_order_note('PayKKa callback query failed, keep current status.');
+            $order->save();
+        }
         wp_safe_redirect($this->get_return_url($order));
         exit;
     }
