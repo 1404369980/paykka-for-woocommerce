@@ -314,8 +314,12 @@ class PaykkaRequestHandler
         }
         switch ($status) {
             case 'SUCCESS':
+                // 支付成功后统一落到 processing（而非 completed），便于后续发货流程处理
                 if (!in_array($order->get_status(), array('processing', 'completed'), true)) {
                     $order->payment_complete();
+                }
+                if ($order->get_status() === 'completed') {
+                    $order->update_status('processing', 'PayKKa status: SUCCESS');
                 }
                 break;
             case 'PROCESSING':
