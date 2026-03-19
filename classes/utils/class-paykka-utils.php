@@ -102,23 +102,22 @@ function paykka_is_sandbox()
     return get_option('paykka_sandbox_flag', 'yes') === 'yes';
 }
 
-// 生产：亚太 openapi.paykka.com，欧洲 openapi.eu.paykka.com
-// 沙箱：openapi-fat 若不存在则使用 pub-fat（Paykka 测试环境常用 pub-fat 子域）
-if (!defined('PAYKKA_API_BASE_AP_SANDBOX')) {
-    define('PAYKKA_API_BASE_AP_SANDBOX', 'https://pub-fat.paykka.com');
-}
-if (!defined('PAYKKA_API_BASE_AP_PROD')) {
-    define('PAYKKA_API_BASE_AP_PROD', 'https://openapi.paykka.com');
-}
-if (!defined('PAYKKA_API_BASE_EU_SANDBOX')) {
-    define('PAYKKA_API_BASE_EU_SANDBOX', 'https://pub-fat.eu.paykka.com');
+// API 地址：
+// 欧洲（生产）：https://openapi.eu.paykka.com
+// 香港（生产）：https://openapi.aq.paykka.com
+// 沙箱（测试）：https://openapi-sandbox.paykka.com
+if (!defined('PAYKKA_API_BASE_SANDBOX')) {
+    define('PAYKKA_API_BASE_SANDBOX', 'https://openapi-sandbox.paykka.com');
 }
 if (!defined('PAYKKA_API_BASE_EU_PROD')) {
     define('PAYKKA_API_BASE_EU_PROD', 'https://openapi.eu.paykka.com');
 }
-// 兼容旧常量名（指向欧洲）
-if (!defined('PAYKKA_API_BASE_SANDBOX')) {
-    define('PAYKKA_API_BASE_SANDBOX', 'https://pub-fat.eu.paykka.com');
+if (!defined('PAYKKA_API_BASE_HK_PROD')) {
+    define('PAYKKA_API_BASE_HK_PROD', 'https://openapi.aq.paykka.com');
+}
+// 兼容旧常量名（历史 AP 视为香港）
+if (!defined('PAYKKA_API_BASE_AP_PROD')) {
+    define('PAYKKA_API_BASE_AP_PROD', PAYKKA_API_BASE_HK_PROD);
 }
 if (!defined('PAYKKA_API_BASE_PROD')) {
     define('PAYKKA_API_BASE_PROD', 'https://openapi.eu.paykka.com');
@@ -131,19 +130,22 @@ if (!defined('PAYKKA_CHECKOUT_BASE_PROD')) {
 }
 
 /**
- * 获取 Paykka API 地区：ap（亚太）| eu（欧洲）
+ * 获取 Paykka API 地区：hk（香港）| eu（欧洲）
  *
- * @return string 'ap'|'eu'
+ * @return string 'hk'|'eu'
  */
 function paykka_get_api_region()
 {
     $region = get_option('paykka_api_region', 'eu');
-    return $region === 'ap' ? 'ap' : 'eu';
+    if ($region === 'ap') {
+        return 'hk';
+    }
+    return $region === 'hk' ? 'hk' : 'eu';
 }
 
 /**
- * 获取 Paykka 后端 API 基地址（根据地区 + 生产/测试 + 配置文件或后台覆盖）
- * 优先级：配置文件当前环境的 api_base_url > 后台「API Base URL」> 按地区+环境的默认 openapi 地址。
+ * 获取 Paykka 后端 API 基地址（根据地区 + 生产/测试 + 配置文件）
+ * 优先级：配置文件当前环境的 api_base_url > 生产/测试默认地址。
  *
  * @return string 不含末尾斜杠的完整基地址，如 https://openapi.eu.paykka.com
  */
@@ -155,20 +157,16 @@ function paykka_get_api_base_url()
     if (!empty($config[$env_key]['api_base_url']) && is_string($config[$env_key]['api_base_url'])) {
         return rtrim($config[$env_key]['api_base_url'], '/');
     }
-    $custom = get_option('paykka_api_base_url', '');
-    if (is_string($custom) && $custom !== '') {
-        return rtrim($custom, '/');
+    if ($sandbox) {
+        return PAYKKA_API_BASE_SANDBOX;
     }
     $region = paykka_get_api_region();
-    if ($region === 'ap') {
-        return $sandbox ? PAYKKA_API_BASE_AP_SANDBOX : PAYKKA_API_BASE_AP_PROD;
-    }
-    return $sandbox ? PAYKKA_API_BASE_EU_SANDBOX : PAYKKA_API_BASE_EU_PROD;
+    return $region === 'hk' ? PAYKKA_API_BASE_HK_PROD : PAYKKA_API_BASE_EU_PROD;
 }
 
 /**
  * 获取 Paykka 收银台前端基地址（JS/CSS 与 setApiUrl/setCDNUrl 用）
- * 优先级：配置文件当前环境的 checkout_base_url > 后台「Checkout Base URL」> 默认生产/测试地址。
+ * 优先级：配置文件当前环境的 checkout_base_url > 默认生产/测试地址。
  *
  * @return string 不含末尾斜杠的完整基地址，如 https://checkout.eu.paykka.com
  */
@@ -180,17 +178,13 @@ function paykka_get_checkout_base_url()
     if (!empty($config[$env_key]['checkout_base_url']) && is_string($config[$env_key]['checkout_base_url'])) {
         return rtrim($config[$env_key]['checkout_base_url'], '/');
     }
-    $custom = get_option('paykka_checkout_base_url', '');
-    if (is_string($custom) && $custom !== '') {
-        return rtrim($custom, '/');
-    }
     return $sandbox ? PAYKKA_CHECKOUT_BASE_SANDBOX : PAYKKA_CHECKOUT_BASE_PROD;
 }
 
 /**
  * 获取 Paykka 配置（根据沙箱开关返回对应环境的 key/merchant_id）
  *
- * @return array{paykka_client_key: string, paykka_public_key: string, paykka_private_key: string, paykka_merchant_id: string}
+ * @return array{paykka_client_key: string, paykka_private_key: string, paykka_merchant_id: string}
  */
 function getPaykkaSettings()
 {
@@ -200,7 +194,6 @@ function getPaykkaSettings()
 
     return array(
         'paykka_client_key'  => get_option($client_key_id, ''),
-        'paykka_public_key'  => get_option($prefix . 'public_key', ''),
         'paykka_private_key' => get_option($prefix . 'private_key', ''),
         'paykka_merchant_id' => get_option($prefix . 'merchant_id', ''),
     );

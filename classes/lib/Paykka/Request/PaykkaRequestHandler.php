@@ -353,13 +353,10 @@ class PaykkaRequestHandler
         }
         $sandbox = get_option('paykka_sandbox_flag') === 'yes';
         if ($sandbox) {
-            return 'https://pub-fat.eu.paykka.com';
+            return 'https://openapi-sandbox.paykka.com';
         }
-        $custom = get_option('paykka_api_base_url', '');
-        if (is_string($custom) && $custom !== '') {
-            return rtrim($custom, '/');
-        }
-        return 'https://pub.eu.paykka.com';
+        $region = get_option('paykka_api_region', 'eu');
+        return $region === 'hk' ? 'https://openapi.aq.paykka.com' : 'https://openapi.eu.paykka.com';
     }
 
     /**

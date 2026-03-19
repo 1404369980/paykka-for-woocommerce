@@ -14,15 +14,15 @@ return array(
     // 当前环境：production（生产）| sandbox（测试）
     'env' => 'sandbox',
 
-    // 生产环境地址（仅当 env=production 且未在后台填写「API Base URL」时，此处生效）
+    // 生产环境地址（仅当 env=production 且未在后台填写时，此处生效）
     'production' => array(
-        'api_base_url'      => 'https://openapi.eu.paykka.com',      // 欧洲；亚太可填 https://openapi.paykka.com
+        'api_base_url'      => 'https://openapi.eu.paykka.com',      // 欧洲；香港可填 https://openapi.aq.paykka.com
         'checkout_base_url' => 'https://checkout.eu.paykka.com',
     ),
 
     // 测试/沙箱环境地址（仅当 env=sandbox 且未在后台填写时，此处生效）
     'sandbox' => array(
-        'api_base_url'      => 'https://pub-fat.eu.paykka.com',   // 欧洲；亚太可填 https://pub-fat.paykka.com（若提供 openapi-fat 可改为 openapi-fat.eu.paykka.com）
+        'api_base_url'      => 'https://openapi-sandbox.paykka.com',
         'checkout_base_url' => 'https://checkout-fat.eu.paykka.com',
     ),
 );

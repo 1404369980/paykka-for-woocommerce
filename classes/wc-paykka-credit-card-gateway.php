@@ -249,11 +249,6 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
                         'description' => __('未勾选为生产、勾选为测试。可通过 paykka-config.php（env）或 wp-config 常量 PAYKKA_ENV 选择环境，优先级高于本勾选。', 'paykka-for-woocommerce'),
                     ],
                     [
-                        'title' => 'Sandbox Public Key',
-                        'type' => 'text',
-                        'id' => 'paykka_sandbox_public_key'
-                    ],
-                    [
                         'title' => 'Sandbox Private Key',
                         'type' => 'textarea',
                         'id' => 'paykka_sandbox_private_key'
@@ -274,11 +269,6 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
                         'title' => 'Sandbox Client Key',
                         'type' => 'text',
                         'id' => 'paykka_sandbox_client_key'
-                    ],
-                    [
-                        'title' => 'Public Key',
-                        'type' => 'text',
-                        'id' => 'paykka_public_key'
                     ],
                     [
                         'title' => 'Private Key',
@@ -309,26 +299,10 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
                         'default' => 'eu',
                         'options' => array(
                             'eu' => __('欧洲地区 (https://openapi.eu.paykka.com)', 'paykka-for-woocommerce'),
-                            'ap' => __('亚太地区 (https://openapi.paykka.com)', 'paykka-for-woocommerce'),
+                            'hk' => __('香港地区 (https://openapi.aq.paykka.com)', 'paykka-for-woocommerce'),
                         ),
                         'desc_tip' => true,
-                        'description' => __('后端 API 调用使用的区域。亚太与欧洲使用不同域名，请与 Paykka 账户所在区域一致。', 'paykka-for-woocommerce'),
-                    ],
-                    [
-                        'title'   => __('API Base URL（可选）', 'paykka-for-woocommerce'),
-                        'type'    => 'text',
-                        'id'      => 'paykka_api_base_url',
-                        'default' => '',
-                        'desc_tip' => true,
-                        'description' => __('不填则按「API 地区」+ 生产/测试自动切换；也可在 paykka-config.php 中配置 production/sandbox.api_base_url。', 'paykka-for-woocommerce'),
-                    ],
-                    [
-                        'title'   => __('Checkout Base URL（可选）', 'paykka-for-woocommerce'),
-                        'type'    => 'text',
-                        'id'      => 'paykka_checkout_base_url',
-                        'default' => '',
-                        'desc_tip' => true,
-                        'description' => __('不填则按生产/测试自动切换；也可在 paykka-config.php 中配置 production/sandbox.checkout_base_url。', 'paykka-for-woocommerce'),
+                        'description' => __('生产环境下后端 API 调用使用的区域。欧洲与香港使用不同域名，请与 Paykka 账户所在区域一致。', 'paykka-for-woocommerce'),
                     ],
                     [
                         'type' => 'sectionend',
