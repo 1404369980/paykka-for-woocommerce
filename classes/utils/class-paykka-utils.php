@@ -198,3 +198,160 @@ function getPaykkaSettings()
         'paykka_merchant_id' => get_option($prefix . 'merchant_id', ''),
     );
 }
+
+/** @var string 订单 meta：待绑定到 WC 退款单的 PayKKa 流水队列（FIFO） */
+function paykka_refund_link_queue_meta_key()
+{
+    return '_paykka_refund_link_queue';
+}
+
+/**
+ * process_refund 成功后入队，在 woocommerce_order_refunded 中按退款金额匹配并写入退款单 meta。
+ *
+ * @param \WC_Order $order
+ * @param string    $refund_trans_id
+ * @param string    $refund_order_id
+ * @param float     $amount Woo 退款金额（与本次退款一致）
+ */
+function paykka_enqueue_refund_paykka_link($order, $refund_trans_id, $refund_order_id, $amount)
+{
+    if (!$order || !is_a($order, 'WC_Order')) {
+        return;
+    }
+    $refund_trans_id = trim((string) $refund_trans_id);
+    $refund_order_id = trim((string) $refund_order_id);
+    if ($refund_trans_id === '' && $refund_order_id === '') {
+        return;
+    }
+    $key = paykka_refund_link_queue_meta_key();
+    $queue = $order->get_meta($key, true);
+    if (!is_array($queue)) {
+        $queue = array();
+    }
+    $queue[] = array(
+        'refund_trans_id' => $refund_trans_id,
+        'refund_order_id' => $refund_order_id,
+        'amount'          => (float) $amount,
+        'ts'              => time(),
+    );
+    $order->update_meta_data($key, $queue);
+    $order->save();
+}
+
+/**
+ * @param int $order_id
+ * @param int $refund_id
+ */
+function paykka_attach_refund_link_on_order_refunded($order_id, $refund_id)
+{
+    $order = wc_get_order($order_id);
+    $refund = wc_get_order($refund_id);
+    if (!$order || !$refund) {
+        return;
+    }
+    if (!is_a($refund, 'WC_Order_Refund')) {
+        return;
+    }
+    if ($order->get_payment_method() !== 'paykka') {
+        return;
+    }
+    $key = paykka_refund_link_queue_meta_key();
+    $queue = $order->get_meta($key, true);
+    if (!is_array($queue) || $queue === array()) {
+        return;
+    }
+    $decimal_places = wc_get_price_decimals();
+    $target_minor = (int) round((float) $refund->get_amount() * pow(10, $decimal_places));
+    $matched_idx = -1;
+    $matched = null;
+    foreach ($queue as $i => $item) {
+        if (!is_array($item)) {
+            continue;
+        }
+        $item_minor = (int) round((float) (isset($item['amount']) ? $item['amount'] : 0) * pow(10, $decimal_places));
+        if ($item_minor === $target_minor) {
+            $matched = $item;
+            $matched_idx = $i;
+            break;
+        }
+    }
+    if ($matched === null) {
+        if (function_exists('paykka_is_debug') && paykka_is_debug()) {
+            error_log('[Paykka] refund link queue: no amount match for refund #' . $refund_id . ' order=' . $order_id);
+        }
+        return;
+    }
+    array_splice($queue, $matched_idx, 1);
+    $order->update_meta_data($key, $queue);
+    $order->save();
+
+    if (!empty($matched['refund_trans_id'])) {
+        $refund->update_meta_data('_paykka_refund_trans_id', sanitize_text_field((string) $matched['refund_trans_id']));
+    }
+    if (!empty($matched['refund_order_id'])) {
+        $refund->update_meta_data('_paykka_refund_order_id', sanitize_text_field((string) $matched['refund_order_id']));
+    }
+    $refund->save();
+}
+
+/**
+ * 按 PayKKa refund_trans_id 删除匹配的商店退款单（用于网关明确失败时冲正账目）。
+ *
+ * @param \WC_Order $order
+ * @param string    $refund_trans_id
+ * @return int 已删除的退款单 ID，0 表示未找到
+ */
+function paykka_delete_wc_refund_matching_trans_id($order, $refund_trans_id)
+{
+    if (!$order || !is_a($order, 'WC_Order')) {
+        return 0;
+    }
+    $refund_trans_id = trim((string) $refund_trans_id);
+    if ($refund_trans_id === '') {
+        return 0;
+    }
+    foreach ($order->get_refunds() as $refund) {
+        if (!is_a($refund, 'WC_Order_Refund')) {
+            continue;
+        }
+        $stored = trim((string) $refund->get_meta('_paykka_refund_trans_id', true));
+        if ($stored !== '' && $stored === $refund_trans_id) {
+            $rid = $refund->get_id();
+            if (function_exists('wc_delete_refund')) {
+                wc_delete_refund($rid);
+            } else {
+                $refund->delete(true);
+            }
+            return $rid;
+        }
+    }
+    return 0;
+}
+
+/**
+ * 按 PayKKa refund_trans_id 查找匹配的 Woo 退款单 ID。
+ *
+ * @param \WC_Order $order
+ * @param string    $refund_trans_id
+ * @return int 退款单 ID，0 表示未找到
+ */
+function paykka_find_wc_refund_id_by_trans_id($order, $refund_trans_id)
+{
+    if (!$order || !is_a($order, 'WC_Order')) {
+        return 0;
+    }
+    $refund_trans_id = trim((string) $refund_trans_id);
+    if ($refund_trans_id === '') {
+        return 0;
+    }
+    foreach ($order->get_refunds() as $refund) {
+        if (!is_a($refund, 'WC_Order_Refund')) {
+            continue;
+        }
+        $stored = trim((string) $refund->get_meta('_paykka_refund_trans_id', true));
+        if ($stored !== '' && $stored === $refund_trans_id) {
+            return (int) $refund->get_id();
+        }
+    }
+    return 0;
+}

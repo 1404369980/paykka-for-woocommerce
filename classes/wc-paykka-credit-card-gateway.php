@@ -9,7 +9,20 @@ use lib\Paykka\Request\PaykkaRequestHandler;
 
 class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
 {
-    private $merchant_id;
+    /** @var string 插件版本（避免 PHP 8.2+ 动态属性弃用） */
+    public $version = '';
+
+    /** @var bool */
+    public $testmode = false;
+
+    /** @var string */
+    public $private_key = '';
+
+    /** @var string */
+    public $publishable_key = '';
+
+    /** @var string */
+    private $merchant_id = '';
 
     public function __construct()
     {
@@ -46,6 +59,7 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
         add_action('woocommerce_update_options_payment_gateways_' . $this->id, array($this, 'process_admin_options'));
         add_action('woocommerce_receipt_' . $this->id, array($this, 'receipt_page'));
         add_action('rest_api_init', array($this, 'register_paykka_rest_routes'), 30);
+        add_action('woocommerce_order_refunded', 'paykka_attach_refund_link_on_order_refunded', 10, 2);
     }
 
     public function register_paykka_rest_routes()
@@ -633,5 +647,82 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
             'result'   => 'failure',
             'message'  => isset($response_data['ret_msg']) ? $response_data['ret_msg'] : __('Payment failed', 'paykka-for-woocommerce'),
         );
+    }
+
+    /**
+     * WooCommerce 退款入口
+     * 仅在交易可退款时调用 PayKKa 退款接口，并通过退款查询同步状态。
+     *
+     * @param int        $order_id
+     * @param float|null $amount
+     * @param string     $reason
+     * @return bool|\WP_Error
+     */
+    public function process_refund($order_id, $amount = null, $reason = '')
+    {
+        $order = wc_get_order($order_id);
+        if (!$order || !$order->get_id()) {
+            return new \WP_Error('paykka_invalid_order', __('Invalid order', 'paykka-for-woocommerce'));
+        }
+        if ($amount === null || (float) $amount <= 0) {
+            return new \WP_Error('paykka_invalid_refund_amount', __('Invalid refund amount', 'paykka-for-woocommerce'));
+        }
+
+        require_once PAYKKA_PLUGIN_PATH . 'classes/lib/Paykka/Request/PaykkaRequestHandler.php';
+        $paykkaPaymentHelper = new PaykkaRequestHandler();
+
+        // 先查询交易，判断当前订单是否可退款；并补齐 PayKKa order_id
+        $query_result = $paykkaPaymentHelper->queryPayment((string) $order_id, '', '');
+        if (!is_array($query_result) || !isset($query_result['ret_code']) || $query_result['ret_code'] !== '000000') {
+            $msg = is_array($query_result) && isset($query_result['ret_msg']) ? (string) $query_result['ret_msg'] : __('Payment query failed', 'paykka-for-woocommerce');
+            return new \WP_Error('paykka_query_failed', $msg);
+        }
+        $paykkaPaymentHelper->syncOrderByQueryResult($order, $query_result, 'refund-check');
+
+        $status = isset($query_result['status']) ? strtoupper((string) $query_result['status']) : '';
+        if (!in_array($status, array('SUCCESS', 'AUTHORIZED', 'PARTIALLY_REFUNDED'), true)) {
+            return new \WP_Error('paykka_not_refundable_status', sprintf(__('Order status %s is not refundable', 'paykka-for-woocommerce'), $status));
+        }
+
+        $able_to_refund_amount = 0;
+        if (isset($query_result['balances']) && is_array($query_result['balances']) && isset($query_result['balances']['able_to_refund_amount'])) {
+            $able_to_refund_amount = (int) $query_result['balances']['able_to_refund_amount'];
+        }
+        $decimal_places = get_option('woocommerce_price_num_decimals', 2);
+        $refund_amount_minor = intval(round((float) $amount * pow(10, $decimal_places)));
+        if ($refund_amount_minor <= 0) {
+            return new \WP_Error('paykka_invalid_refund_amount', __('Invalid refund amount', 'paykka-for-woocommerce'));
+        }
+        if ($able_to_refund_amount > 0 && $refund_amount_minor > $able_to_refund_amount) {
+            return new \WP_Error('paykka_refund_exceed_limit', __('Refund amount exceeds available refundable amount', 'paykka-for-woocommerce'));
+        }
+
+        $refund_reason = 'REQUESTED_BY_CUSTOMER';
+        if (is_string($reason) && trim($reason) !== '') {
+            $refund_reason = 'OTHER';
+        }
+        $refund_response = $paykkaPaymentHelper->refundPayment($order, (float) $amount, $refund_reason, '');
+        if (!is_array($refund_response) || !isset($refund_response['ret_code']) || $refund_response['ret_code'] !== '000000') {
+            $msg = is_array($refund_response) && isset($refund_response['ret_msg']) ? (string) $refund_response['ret_msg'] : __('Refund request failed', 'paykka-for-woocommerce');
+            return new \WP_Error('paykka_refund_failed', $msg);
+        }
+
+        // 退款发起后立刻查询一次退款单，更新订单退款状态与退款订单号
+        $refund_trans_id = isset($refund_response['refund_trans_id']) ? (string) $refund_response['refund_trans_id'] : '';
+        $refund_order_id = isset($refund_response['refund_order_id']) ? (string) $refund_response['refund_order_id'] : '';
+        if ($refund_trans_id !== '' || $refund_order_id !== '') {
+            $refund_query_result = $paykkaPaymentHelper->queryRefund($refund_trans_id, $refund_order_id);
+            if (is_array($refund_query_result) && isset($refund_query_result['ret_code']) && $refund_query_result['ret_code'] === '000000') {
+                $paykkaPaymentHelper->syncOrderByRefundQueryResult($order, $refund_query_result, 'refund');
+            } elseif (function_exists('paykka_is_debug') && paykka_is_debug()) {
+                error_log('[Paykka Refund] refund query failed order_id=' . $order_id . ' query=' . wp_json_encode($refund_query_result));
+            }
+        }
+
+        if (function_exists('paykka_enqueue_refund_paykka_link')) {
+            paykka_enqueue_refund_paykka_link($order, $refund_trans_id, $refund_order_id, (float) $amount);
+        }
+
+        return true;
     }
 }
