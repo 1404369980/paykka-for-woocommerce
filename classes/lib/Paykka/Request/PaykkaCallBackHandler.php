@@ -41,7 +41,7 @@ class PaykkaCallBackHandler
             exit;
         }
 
-        require_once PAYKKA_PLUGIN_PATH . 'classes/lib/Paykka/Request/PaykkaRequestHandler.php';
+        require_once PAYKKA_PATH_FILE_PAYKKA_REQUEST_HANDLER;
         $paykkaPaymentHelper = new PaykkaRequestHandler();
         $query_result = $paykkaPaymentHelper->queryPayment((string) $order_id, '', '');
         if (is_array($query_result) && isset($query_result['ret_code']) && $query_result['ret_code'] === '000000') {
