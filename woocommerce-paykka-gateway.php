@@ -4,7 +4,7 @@
  * Plugin Name:       PayKKa for WooCommerce
  * Plugin URI:        https://github.com/1404369980/paykka-for-woocommerce
  * Description:       Easily add the PayKKa Complete Payments Platform including PayKKa Checkout, Direct Credit Processing, and alternative payment methods like Apple Pay, Google Pay.
- * Version:           1.0.0
+ * Version:           1.3.0
  * Author:            Fengqiao Yi
  * Author URI:        https://github.com/1404369980/paykka-for-woocommerce
  * License:           GNU General Public License v3.0
