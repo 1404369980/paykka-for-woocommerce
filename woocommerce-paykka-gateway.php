@@ -4,7 +4,7 @@
  * Plugin Name:       PayKKa for WooCommerce
  * Plugin URI:        https://github.com/1404369980/paykka-for-woocommerce
  * Description:       PayKKa Hosted 收银台支付（跳转 Paykka 完成付款），支持 WooCommerce 结账与 Blocks。
- * Version:           1.3.1
+ * Version:           1.4.0
  * Author:            Fengqiao Yi
  * Author URI:        https://github.com/1404369980/paykka-for-woocommerce
  * License:           GNU General Public License v3.0
