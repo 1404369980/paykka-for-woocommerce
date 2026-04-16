@@ -30,7 +30,7 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
         $this->has_fields = false;
         $this->version = '8.2.0';
         $this->icon = '';
-        $this->method_description = __('与 PayPal 类似：结账页仅显示「Paykka」一项，顾客选择后直接进入对应支付流程。支付模式在「支付方式」中选定。', 'paykka-for-woocommerce');
+        $this->method_description = __('结账页仅显示「Paykka」一项，顾客选择后跳转 Paykka Hosted 收银台完成支付。', 'paykka-for-woocommerce');
         $this->method_title = __('Paykka', 'paykka-for-woocommerce');
 
         $this->title = __('Paykka', 'paykka-for-woocommerce');
@@ -58,73 +58,7 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
         // 这个动作挂钩保存设置
         add_action('woocommerce_update_options_payment_gateways_' . $this->id, array($this, 'process_admin_options'));
         add_action('woocommerce_receipt_' . $this->id, array($this, 'receipt_page'));
-        add_action('rest_api_init', array($this, 'register_paykka_rest_routes'), 30);
         add_action('woocommerce_order_refunded', 'paykka_attach_refund_link_on_order_refunded', 10, 2);
-    }
-
-    public function register_paykka_rest_routes()
-    {
-        register_rest_route('paykka/v1', '/drop-in/session', array(
-            'methods'             => 'POST',
-            'callback'            => array($this, 'handler_drop_in_session'),
-            'permission_callback' => '__return_true',
-        ));
-        register_rest_route('paykka/v1', '/encrypted_card', array(
-            'methods'             => 'POST',
-            'callback'            => array($this, 'handler_encrypted_card'),
-            'permission_callback' => '__return_true',
-        ));
-    }
-
-    public function handler_drop_in_session(\WP_REST_Request $request)
-    {
-        if (!is_user_logged_in()) {
-            return new \WP_REST_Response(array('success' => false, 'message' => __('Please log in first', 'paykka-for-woocommerce')), 401);
-        }
-        $params = $request->get_params();
-        $encrypted = isset($params['encrypted_card_data']) ? $params['encrypted_card_data'] : null;
-        if (empty($encrypted)) {
-            return new \WP_REST_Response(array('success' => false, 'message' => __('Missing card data', 'paykka-for-woocommerce')), 400);
-        }
-        $user_id = get_current_user_id();
-        set_transient('encrypted_card_data' . $user_id, $encrypted, 20);
-        return new \WP_REST_Response(array('success' => true));
-    }
-
-    public function handler_encrypted_card(\WP_REST_Request $request)
-    {
-        $params = $request->get_params();
-        $order_id = isset($params['order_id']) ? absint($params['order_id']) : 0;
-        $encrypted_card_data = isset($params['encrypted_card_data']) ? $params['encrypted_card_data'] : null;
-        if (!$order_id || !is_array($encrypted_card_data)) {
-            return new \WP_REST_Response(array('success' => false, 'message' => __('Invalid request', 'paykka-for-woocommerce')), 400);
-        }
-        $order = wc_get_order($order_id);
-        if (!$order || !$order->get_id()) {
-            return new \WP_REST_Response(array('success' => false, 'message' => __('Order not found', 'paykka-for-woocommerce')), 404);
-        }
-        $paykkaPaymentHelper = new PaykkaRequestHandler();
-        $response_data = $paykkaPaymentHelper->handlerCardPayment($order, $encrypted_card_data);
-        if (isset($response_data['ret_code']) && $response_data['ret_code'] === '000000') {
-            if (!empty($response_data['order_id'])) {
-                $order->update_meta_data('_paykka_order_id', sanitize_text_field((string) $response_data['order_id']));
-            }
-            if (!in_array($order->get_status(), array('processing', 'completed', 'on-hold'), true)) {
-                $order->update_status('on-hold', __('PayKKa payment accepted, awaiting confirmation', 'paykka-for-woocommerce'));
-            } else {
-                $order->add_order_note(__('PayKKa payment accepted, awaiting confirmation', 'paykka-for-woocommerce'));
-            }
-            $order->save();
-            return new \WP_REST_Response(array(
-                'success'       => true,
-                'redirect_url'  => $this->get_return_url($order),
-            ));
-        }
-        $error_message = isset($response_data['ret_msg']) ? sanitize_text_field($response_data['ret_msg']) : __('Payment processing failed', 'paykka-for-woocommerce');
-        if (function_exists('paykka_is_debug') && paykka_is_debug() && is_array($response_data)) {
-            error_log('[Paykka Encrypted Card Error] ' . wp_json_encode($response_data));
-        }
-        return new \WP_REST_Response(array('success' => false, 'message' => $error_message));
     }
 
     public function init_form_fields()
@@ -221,7 +155,6 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
         $tabs = array(
             'connection' => __('连接设置', 'paykka-for-woocommerce'),
             'standard'   => __('标准支付', 'paykka-for-woocommerce'),
-            'methods'    => __('支付方式', 'paykka-for-woocommerce'),
             'advanced'   => __('高级设置', 'paykka-for-woocommerce'),
         );
 
@@ -243,7 +176,7 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
     public function process_admin_options()
     {
         $subtab = isset($_POST['paykka_current_subtab']) ? sanitize_text_field(wp_unslash($_POST['paykka_current_subtab'])) : (isset($_GET['subtab']) ? sanitize_text_field($_GET['subtab']) : 'connection');
-        $allowed = array('connection', 'standard', 'methods', 'advanced');
+        $allowed = array('connection', 'standard', 'advanced');
         if (!in_array($subtab, $allowed, true)) {
             $subtab = 'connection';
         }
@@ -364,34 +297,6 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
                         'id' => 'paykka_advanced_end'
                     ]
                 ];
-            case 'methods':
-                return array(
-                    array(
-                        'title' => __('支付模式', 'paykka-for-woocommerce'),
-                        'desc'  => __('结账页只显示「Paykka」一项（与 PayPal 一致），顾客选择后按下方所选模式跳转。', 'paykka-for-woocommerce'),
-                        'type'  => 'title',
-                        'id'    => 'paykka_methods_title',
-                    ),
-                    array(
-                        'title'   => __('支付模式', 'paykka-for-woocommerce'),
-                        'type'    => 'select',
-                        'id'      => 'paykka_payment_mode',
-                        'default' => 'hosted',
-                        'options' => array(
-                            'hosted'           => __('Hosted 收银台（跳转 Paykka 收银台）', 'paykka-for-woocommerce'),
-                            'dropin'           => __('Drop-in 卡片（站内 Drop-in 页面）', 'paykka-for-woocommerce'),
-                            'embedded'         => __('Component / Accordion（站内组件页）', 'paykka-for-woocommerce'),
-                            'encrypted_card'   => __('Encrypted Card（站内加密卡页）', 'paykka-for-woocommerce'),
-                            'google_pay'       => __('Google Pay', 'paykka-for-woocommerce'),
-                        ),
-                        'desc_tip' => true,
-                        'description' => __('选定后，所有选择 Paykka 的订单均按此模式处理。', 'paykka-for-woocommerce'),
-                    ),
-                    array(
-                        'type' => 'sectionend',
-                        'id'   => 'paykka_methods_end',
-                    ),
-                );
             case 'connection':
             default:
                 return array(
@@ -429,27 +334,6 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
         }
     }
 
-    /**
-     * 当前后台选定的支付模式（单一模式，结账页不展示子选项，与 PayPal 一致）
-     *
-     * @return array [ ['id' => 'hosted', 'title' => '...'] ] 仅一个元素
-     */
-    protected function get_enabled_paykka_methods()
-    {
-        $mode = get_option('paykka_payment_mode', 'hosted');
-        $titles = array(
-            'hosted'           => __('Hosted 收银台', 'paykka-for-woocommerce'),
-            'dropin'           => __('Drop-in 卡片', 'paykka-for-woocommerce'),
-            'embedded'         => __('Component', 'paykka-for-woocommerce'),
-            'encrypted_card'   => __('Encrypted Card', 'paykka-for-woocommerce'),
-            'google_pay'       => __('Google Pay', 'paykka-for-woocommerce'),
-        );
-        if (!isset($titles[$mode])) {
-            $mode = 'hosted';
-        }
-        return array(array('id' => $mode, 'title' => $titles[$mode]));
-    }
-
     public function payment_fields()
     {
     }
@@ -483,47 +367,14 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
             return array('result' => 'failure', 'message' => __('Invalid order', 'paykka-for-woocommerce'));
         }
 
-        $method = strtolower(trim((string) get_option('paykka_payment_mode', 'hosted')));
-        $order->update_meta_data('_paykka_sub_method', $method);
+        $order->update_meta_data('_paykka_sub_method', 'hosted');
         $order->save();
 
         require_once PAYKKA_PLUGIN_PATH . 'classes/lib/Paykka/Request/PaykkaRequestHandler.php';
         $paykkaPaymentHelper = new PaykkaRequestHandler();
 
-        if ($method === 'hosted') {
-            ob_end_clean();
-            return $this->process_payment_hosted($order, $order_id, $paykkaPaymentHelper);
-        }
-        if ($method === 'dropin') {
-            ob_end_clean();
-            return $this->process_payment_dropin($order, $order_id, $paykkaPaymentHelper);
-        }
-        if ($method === 'embedded') {
-            ob_end_clean();
-            return $this->process_payment_embedded($order, $order_id, $paykkaPaymentHelper);
-        }
-        if ($method === 'encrypted_card') {
-            ob_end_clean();
-            WC()->cart->empty_cart();
-            return array(
-                'result'   => 'success',
-                'redirect' => add_query_arg('order_id', $order_id, paykka_get_payment_url('card-encrypted')),
-            );
-        }
-        if ($method === 'google_pay') {
-            return $this->process_payment_google_pay($order_id, $paykkaPaymentHelper);
-        }
-
-        // 未识别的模式（如选项未保存或被篡改）时按 hosted 处理
-        $valid_methods = array('hosted', 'dropin', 'embedded', 'encrypted_card', 'google_pay');
-        if (!in_array($method, $valid_methods, true)) {
-            $method = 'hosted';
-            ob_end_clean();
-            return $this->process_payment_hosted($order, $order_id, $paykkaPaymentHelper);
-        }
-
         ob_end_clean();
-        return array('result' => 'failure', 'message' => __('Invalid payment method', 'paykka-for-woocommerce'));
+        return $this->process_payment_hosted($order, $order_id, $paykkaPaymentHelper);
     }
 
     private function process_payment_hosted($order, $order_id, PaykkaRequestHandler $paykkaPaymentHelper)
@@ -551,102 +402,6 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
         $msg = isset($response_data['ret_msg']) ? $response_data['ret_msg'] : __('Payment session failed', 'paykka-for-woocommerce');
         wc_add_notice($msg, 'error');
         return array('result' => 'failure', 'message' => $msg);
-    }
-
-    private function process_payment_dropin($order, $order_id, PaykkaRequestHandler $paykkaPaymentHelper)
-    {
-        $response_data = $paykkaPaymentHelper->buildSessionId($order, 'DROP_IN');
-        if (empty($response_data) || !isset($response_data['ret_code']) || $response_data['ret_code'] !== '000000') {
-            return array(
-                'result'   => 'failure',
-                'message'  => isset($response_data['ret_msg']) ? $response_data['ret_msg'] : __('Payment session failed', 'paykka-for-woocommerce'),
-            );
-        }
-        $session_id = isset($response_data['data']['session_id']) ? $response_data['data']['session_id'] : '';
-        if ($session_id === '') {
-            return array('result' => 'failure', 'message' => __('Session ID missing', 'paykka-for-woocommerce'));
-        }
-        $settings = function_exists('getPaykkaSettings') ? getPaykkaSettings() : array();
-        $client_key = isset($settings['paykka_client_key']) ? $settings['paykka_client_key'] : '';
-        $order->update_status('pending', __('Awaiting Paykka Drop-in', 'paykka-for-woocommerce'));
-        WC()->cart->empty_cart();
-        $callback_url = \lib\Paykka\Request\PaykkaCallBackHandler::getCallbackUrl($order->get_id());
-        $notify_url = \lib\Paykka\Request\PaykkaWebHookHandler::getWebHookUrl();
-        WC()->session->__unset('paykka_dropin_session_id');
-        WC()->session->__unset('paykka_dropin_client_key');
-        WC()->session->__unset('paykka_dropin_callback_url');
-        WC()->session->__unset('paykka_dropin_notify_url');
-        WC()->session->set('paykka_dropin_session_id', $session_id);
-        WC()->session->set('paykka_dropin_client_key', $client_key);
-        WC()->session->set('paykka_dropin_callback_url', $callback_url);
-        WC()->session->set('paykka_dropin_notify_url', $notify_url);
-        return array('result' => 'success', 'redirect' => paykka_get_payment_url('dropin'));
-    }
-
-    private function process_payment_embedded($order, $order_id, PaykkaRequestHandler $paykkaPaymentHelper)
-    {
-        $response_data = $paykkaPaymentHelper->buildSessionId($order, 'COMPONENT');
-        if (empty($response_data) || !isset($response_data['ret_code']) || $response_data['ret_code'] !== '000000') {
-            return array(
-                'result'   => 'failure',
-                'message'  => isset($response_data['ret_msg']) ? $response_data['ret_msg'] : __('Payment session failed', 'paykka-for-woocommerce'),
-            );
-        }
-        $session_id = isset($response_data['data']['session_id']) ? $response_data['data']['session_id'] : '';
-        if ($session_id === '') {
-            return array('result' => 'failure', 'message' => __('Session ID missing', 'paykka-for-woocommerce'));
-        }
-        $settings = function_exists('getPaykkaSettings') ? getPaykkaSettings() : array();
-        $client_key = isset($settings['paykka_client_key']) ? $settings['paykka_client_key'] : '';
-        $order->update_status('pending', __('Awaiting Paykka Component', 'paykka-for-woocommerce'));
-        WC()->cart->empty_cart();
-        $callback_url = \lib\Paykka\Request\PaykkaCallBackHandler::getCallbackUrl($order->get_id());
-        $notify_url = \lib\Paykka\Request\PaykkaWebHookHandler::getWebHookUrl();
-        WC()->session->__unset('woocommerce_order_id');
-        WC()->session->__unset('paykka_session_id');
-        WC()->session->__unset('paykka_client_key');
-        WC()->session->__unset('paykka_callback_url');
-        WC()->session->__unset('paykka_notify_url');
-        WC()->session->set('woocommerce_order_id', $order_id);
-        WC()->session->set('paykka_session_id', $session_id);
-        WC()->session->set('paykka_client_key', $client_key);
-        WC()->session->set('paykka_callback_url', $callback_url);
-        WC()->session->set('paykka_notify_url', $notify_url);
-        return array('result' => 'success', 'redirect' => paykka_get_payment_url('accordion'));
-    }
-
-    private function process_payment_google_pay($order_id, PaykkaRequestHandler $paykkaPaymentHelper)
-    {
-        $raw_post = file_get_contents('php://input');
-        $request_data = is_string($raw_post) ? json_decode($raw_post, true) : array();
-        if (!is_array($request_data) || empty($request_data['payment_data'])) {
-            return array('result' => 'failure', 'message' => __('Invalid payment data', 'paykka-for-woocommerce'));
-        }
-        $payment_google_data = null;
-        foreach ($request_data['payment_data'] as $payment_item) {
-            if (isset($payment_item['key']) && $payment_item['key'] === 'payment_google_data' && isset($payment_item['value'])) {
-                $payment_google_data = json_decode($payment_item['value'], true);
-                break;
-            }
-        }
-        if (!$payment_google_data || empty($payment_google_data['paymentMethodData']['tokenizationData']['token'])) {
-            return array('result' => 'failure', 'message' => __('Google Pay token missing', 'paykka-for-woocommerce'));
-        }
-        $google_token = $payment_google_data['paymentMethodData']['tokenizationData']['token'];
-        $order = wc_get_order($order_id);
-        if (!$order || !$order->get_id()) {
-            return array('result' => 'failure', 'message' => __('Invalid order', 'paykka-for-woocommerce'));
-        }
-        $order->update_status('pending', __('Processing Google Pay', 'paykka-for-woocommerce'));
-        WC()->cart->empty_cart();
-        $response_data = $paykkaPaymentHelper->handlerGooglePayPayment($order, $google_token);
-        if (isset($response_data['ret_code']) && $response_data['ret_code'] === '000000') {
-            return array('result' => 'success', 'redirect' => $order->get_checkout_order_received_url());
-        }
-        return array(
-            'result'   => 'failure',
-            'message'  => isset($response_data['ret_msg']) ? $response_data['ret_msg'] : __('Payment failed', 'paykka-for-woocommerce'),
-        );
     }
 
     /**

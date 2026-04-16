@@ -65,7 +65,7 @@ final class WC_Gateway_Paykka_Support extends AbstractPaymentMethodType
             'title'       => $this->settings['title'],
             'description' => $this->settings['description'],
             'supports'    => array('products'),
-            'paykka_mode' => get_option('paykka_payment_mode', 'hosted'),
+            'paykka_mode' => 'hosted',
         );
     }
 }

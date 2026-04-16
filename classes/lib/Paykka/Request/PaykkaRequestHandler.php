@@ -2,7 +2,6 @@
 namespace lib\Paykka\Request;
 
 use lib\Paykka\Api\Bill;
-use lib\Paykka\Api\Browser;
 use lib\Paykka\Api\Shipping;
 use lib\Paykka\Api\Goods;
 use lib\Paykka\Api\PayCustomer;
@@ -14,7 +13,6 @@ use lib\Paykka\Request\PaykkaCallBackHandler;
 
 $paykka_base = defined('PAYKKA_PLUGIN_PATH') ? PAYKKA_PLUGIN_PATH : (defined('FENGQIAO_PAYKKA_URL') ? FENGQIAO_PAYKKA_URL : '');
 require_once $paykka_base . 'classes/lib/Paykka/Api/Bill.php';
-require_once $paykka_base . 'classes/lib/Paykka/Api/Browser.php';
 require_once $paykka_base . 'classes/lib/Paykka/Api/Shipping.php';
 require_once $paykka_base . 'classes/lib/Paykka/Api/Goods.php';
 require_once $paykka_base . 'classes/lib/Paykka/Api/PayCustomer.php';
@@ -279,13 +277,8 @@ class PaykkaRequestHandler
     }
 
     // ========================================================================
-    // 业务方法：Session / 交易查询 / 退款 / 退款查询 / 卡支付 / Google Pay
+    // 业务方法：Hosted Session / 交易查询 / 退款 / 退款查询
     // ========================================================================
-
-    public function buildSessionId($order, $session_mode)
-    {
-        return $this->handlerSession($order, $session_mode);
-    }
 
     public function buildSessionUrl($order): mixed
     {
@@ -293,7 +286,7 @@ class PaykkaRequestHandler
     }
 
     /**
-     * 创建收银台 Session（Hosted / Drop-in / Component）
+     * 创建收银台 Session（Hosted）
      * 接口: POST /v3/payment/acq/session
      */
     public function handlerSession($order, $session_mode)
@@ -513,142 +506,6 @@ class PaykkaRequestHandler
         $api_result = $this->postApi($request_path, $http_body, $headers, 'RefundQuery');
         // 与 queryPayment 一致展平 data，便于 syncOrderByRefundQueryResult 读取 status / refund_order_id 等
         return $this->parseV3Response($api_result, true);
-    }
-
-    /**
-     * 加密卡支付（v1 签名）
-     * 接口: POST /apis/payments
-     */
-    public function handlerCardPayment($order, $card_encrypted_data)
-    {
-        $paykkaSettings = getPaykkaSettings();
-        $merchant_id = $paykkaSettings['paykka_merchant_id'];
-        $private_key = $paykkaSettings['paykka_private_key'];
-
-        $now = new \DateTime('now', new \DateTimeZone('UTC'));
-        $now->setTimezone(new \DateTimeZone('Asia/Hong_Kong'));
-        $now->add(new \DateInterval('PT5M'));
-        $expire_time = $now->format('Y-m-d H:i:s');
-        $timestamp = round(microtime(true) * 1000);
-
-        $callback_url = PaykkaCallBackHandler::getCallbackUrl($order->get_id());
-        $notify_url = PaykkaWebHookHandler::getWebHookUrl();
-
-        $decimal_places = get_option('woocommerce_price_num_decimals', 2);
-        $order_amount = intval(round($order->get_total() * pow(10, $decimal_places)));
-
-        $paymentRequest = new PaymentRequest();
-        $paymentRequest->version = 'v1.2';
-        $paymentRequest->__set('merchant_id', $merchant_id);
-        $paymentRequest->__set('payment_type', 'PURCHASE');
-        $paymentRequest->__set('trans_id', $order->get_id());
-        $paymentRequest->__set('timestamp', $timestamp);
-        $paymentRequest->__set('currency', $order->get_currency());
-        $paymentRequest->__set('amount', $order_amount);
-        $paymentRequest->__set('notify_url', $notify_url);
-        $paymentRequest->__set('return_url', $callback_url);
-        $paymentRequest->__set('expire_time', $expire_time);
-
-        $paykka_capture_method_flag = get_option('paykka_capture_method_flag');
-        if ($paykka_capture_method_flag == 'yes') {
-            $paymentRequest->__set('capture_method', 'MANUAL');
-        }
-
-        $paymentRequest->bill = $this->buildBill($order);
-        $paymentRequest->shipping = $this->buildShipping($order);
-        $paymentRequest->goods = $this->buildGoodsItems($order);
-        $paymentRequest->customer = $this->buildCustomer($order);
-        $paymentRequest->browser = new Browser();
-
-        $card_encrypted = is_array($card_encrypted_data) ? $card_encrypted_data : (array) json_decode($card_encrypted_data, true);
-        $payment = new PaymentInfo();
-        $payment->encrypted_card_no = isset($card_encrypted['encryptedCardNumber']) ? $card_encrypted['encryptedCardNumber'] : '';
-        $payment->encrypted_exp_year = isset($card_encrypted['encryptedExpireYear']) ? $card_encrypted['encryptedExpireYear'] : '';
-        $payment->encrypted_exp_month = isset($card_encrypted['encryptedExpireMonth']) ? $card_encrypted['encryptedExpireMonth'] : '';
-        $payment->encrypted_cvv = isset($card_encrypted['encryptedCVV']) ? $card_encrypted['encryptedCVV'] : '';
-        $payment->payment_method = 'BANKCARD';
-        $paymentRequest->payment = $payment;
-
-        $http_body = $paymentRequest->toJson();
-        $signStr = $this->paykkaSign($merchant_id, $timestamp, $http_body, $private_key);
-        $headers = array(
-            'Content-Type' => 'application/json',
-            'signature' => $signStr,
-            'type' => 'RSA256'
-        );
-
-        $api_result = $this->postApi('/apis/payments', $http_body, $headers, 'CardPayment');
-        if (!empty($api_result['wp_error'])) {
-            wc_add_notice('Payment error: ' . $api_result['wp_error'], 'error');
-            return;
-        }
-        return $api_result['response_data'];
-    }
-
-    /**
-     * Google Pay 支付（v1 签名）
-     * 接口: POST /apis/payments
-     */
-    public function handlerGooglePayPayment($order, $google_token)
-    {
-        $paykkaSettings = getPaykkaSettings();
-        $merchant_id = $paykkaSettings['paykka_merchant_id'];
-        $private_key = $paykkaSettings['paykka_private_key'];
-
-        $now = new \DateTime('now', new \DateTimeZone('UTC'));
-        $now->setTimezone(new \DateTimeZone('Asia/Hong_Kong'));
-        $now->add(new \DateInterval('PT5M'));
-        $expire_time = $now->format('Y-m-d H:i:s');
-        $timestamp = round(microtime(true) * 1000);
-
-        $callback_url = PaykkaCallBackHandler::getCallbackUrl($order->get_id());
-        $notify_url = PaykkaWebHookHandler::getWebHookUrl();
-
-        $decimal_places = get_option('woocommerce_price_num_decimals', 2);
-        $order_amount = intval(round($order->get_total() * pow(10, $decimal_places)));
-
-        $paymentRequest = new PaymentRequest();
-        $paymentRequest->version = 'v1.2';
-        $paymentRequest->__set('merchant_id', $merchant_id);
-        $paymentRequest->__set('payment_type', 'PURCHASE');
-        $paymentRequest->__set('trans_id', $order->get_id());
-        $paymentRequest->__set('timestamp', $timestamp);
-        $paymentRequest->__set('currency', $order->get_currency());
-        $paymentRequest->__set('amount', $order_amount);
-        $paymentRequest->__set('notify_url', $notify_url);
-        $paymentRequest->__set('return_url', $callback_url);
-        $paymentRequest->__set('expire_time', $expire_time);
-
-        $paykka_capture_method_flag = get_option('paykka_capture_method_flag');
-        if ($paykka_capture_method_flag == 'yes') {
-            $paymentRequest->__set('capture_method', 'MANUAL');
-        }
-
-        $paymentRequest->bill = $this->buildBill($order);
-        $paymentRequest->shipping = $this->buildShipping($order);
-        $paymentRequest->goods = $this->buildGoodsItems($order);
-        $paymentRequest->customer = $this->buildCustomer($order);
-        $paymentRequest->browser = new Browser();
-
-        $payment = new PaymentInfo();
-        $payment->payment_method = 'GOOGLE_PAY';
-        $payment->token_data = $google_token;
-        $paymentRequest->payment = $payment;
-
-        $http_body = $paymentRequest->toJson();
-        $signStr = $this->paykkaSign($merchant_id, $timestamp, $http_body, $private_key);
-        $headers = array(
-            'Content-Type' => 'application/json',
-            'signature' => $signStr,
-            'type' => 'RSA256'
-        );
-
-        $api_result = $this->postApi('/apis/payments', $http_body, $headers, 'GooglePay');
-        if (!empty($api_result['wp_error'])) {
-            wc_add_notice('Payment error: ' . $api_result['wp_error'], 'error');
-            return;
-        }
-        return $api_result['response_data'];
     }
 
     // ========================================================================
