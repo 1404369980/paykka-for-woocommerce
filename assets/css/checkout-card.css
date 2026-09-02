@@ -1,0 +1,33 @@
+.paykka-checkout-fields {
+    margin: 0.75em 0 0;
+}
+
+.paykka-wallet-container {
+    margin: 0 0 0.65em;
+}
+
+.paykka-wallet-container:empty {
+    display: none;
+}
+
+.paykka-card-container {
+    min-height: 72px;
+    margin: 0.5em 0;
+}
+
+.paykka-card-status,
+.paykka-card-hint {
+    margin: 0.35em 0;
+    font-size: 0.92em;
+    color: #555;
+}
+
+.paykka-card-error {
+    margin: 0.35em 0;
+    color: #b32d2e;
+    font-size: 0.92em;
+}
+
+.paykka-card-error[hidden] {
+    display: none !important;
+}

@@ -18,6 +18,8 @@ class PaymentRequest {
     public $display_merchant_name;
     public $display_locale;
     public $theme_id;
+    /** @var array|null 允许展示的支付方式，如 APPLE_PAY / GOOGLE_PAY / BANKCARD */
+    public $allowed_payment_methods;
     public $goods = [];
     public $bill;
     public $shipping;
@@ -55,6 +57,7 @@ class PaymentRequest {
             'display_merchant_name' => $this->display_merchant_name,
             'display_locale' => $this->display_locale,
             'theme_id' => $this->theme_id,
+            'allowed_payment_methods' => $this->allowed_payment_methods,
             'capture_method' => $this->capture_method,
             'goods' => array_map(fn($good) => $this->objectToArray($good), $this->goods),
             'bill' => $this->objectToArray($this->bill),

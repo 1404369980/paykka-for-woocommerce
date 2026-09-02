@@ -3,8 +3,8 @@
  * @wordpress-plugin
  * Plugin Name:       PayKKa for WooCommerce
  * Plugin URI:        https://github.com/1404369980/paykka-for-woocommerce
- * Description:       PayKKa Hosted 收银台支付（跳转 Paykka 完成付款），支持 WooCommerce 结账与 Blocks。
- * Version:           1.4.0
+ * Description:       PayKKa Hosted 与 Embedded Payments（卡 / Apple Pay / Google Pay），支持 WooCommerce 结账与 Blocks。
+ * Version:           1.5.4
  * Author:            Fengqiao Yi
  * Author URI:        https://github.com/1404369980/paykka-for-woocommerce
  * License:           GNU General Public License v3.0
@@ -52,6 +52,7 @@ function woocommerce_paykka_init()
     function woocommerce_paykka_add_gateway($methods)
     {
         $methods[] = 'Paykka_Credit_Card_Gateway';
+        $methods[] = 'Paykka_Card_Gateway';
         return $methods;
     }
     add_filter('woocommerce_payment_gateways', 'woocommerce_paykka_add_gateway');
@@ -66,6 +67,28 @@ function woocommerce_paykka_init()
     }
 
     require_once $base . 'classes/wc-paykka-credit-card-gateway.php';
+    require_once $base . 'classes/wc-paykka-card-gateway.php';
+
+    /**
+     * wc-ajax 在 template_redirect 触发；此时若仅依赖网关构造函数注册 hook，
+     * 支付网关可能尚未实例化，会导致 200 空响应（前端 JSON parse 失败）。
+     */
+    add_action('wc_ajax_paykka_card_create_session', 'paykka_card_ajax_create_session');
+}
+
+/**
+ * Blocks Credit Card：创建 PayKKa session。
+ */
+function paykka_card_ajax_create_session()
+{
+    if (!function_exists('WC') || !WC()->payment_gateways()) {
+        wp_send_json_error(array('message' => __('WooCommerce unavailable', 'paykka-for-woocommerce')), 500);
+    }
+    $gateways = WC()->payment_gateways()->payment_gateways();
+    if (empty($gateways['paykka-card']) || !is_object($gateways['paykka-card']) || !method_exists($gateways['paykka-card'], 'ajax_create_session')) {
+        wp_send_json_error(array('message' => __('Credit Card gateway unavailable', 'paykka-for-woocommerce')), 500);
+    }
+    $gateways['paykka-card']->ajax_create_session();
 }
 
 
@@ -74,16 +97,81 @@ function paykka_gateway_block_support()
     // 检查 WooCommerce Blocks 的 AbstractPaymentMethodType 类是否存在
     if (class_exists('Automattic\WooCommerce\Blocks\Payments\Integrations\AbstractPaymentMethodType')) {
         require_once plugin_dir_path(__FILE__) . 'includes/blocks/wc-gateway-paykka-support.php';
+        require_once plugin_dir_path(__FILE__) . 'includes/blocks/wc-gateway-paykka-card-support.php';
         add_action(
             'woocommerce_blocks_payment_method_type_registration',
             function (Automattic\WooCommerce\Blocks\Payments\PaymentMethodRegistry $payment_method_registry) {
                 $payment_method_registry->register(new WC_Gateway_Paykka_Support());
+                $payment_method_registry->register(new WC_Gateway_Paykka_Card_Support());
             }
         );
     }
 }
 add_action('woocommerce_blocks_loaded', 'paykka_gateway_block_support');
 
+/**
+ * 结账可用网关中：若 Credit Card 排在 Hosted 前面，则对调，避免默认选中落到 Card。
+ * 不改变与其他支付方式的相对顺序。
+ *
+ * @param array $gateways
+ * @return array
+ */
+function paykka_prefer_hosted_before_card($gateways)
+{
+    if (!is_array($gateways) || empty($gateways['paykka']) || empty($gateways['paykka-card'])) {
+        return $gateways;
+    }
+    $keys = array_keys($gateways);
+    $pos_hosted = array_search('paykka', $keys, true);
+    $pos_card   = array_search('paykka-card', $keys, true);
+    if ($pos_hosted === false || $pos_card === false || $pos_hosted < $pos_card) {
+        return $gateways;
+    }
+
+    $hosted = $gateways['paykka'];
+    $card   = $gateways['paykka-card'];
+    $out    = array();
+    foreach ($gateways as $id => $gateway) {
+        if ($id === 'paykka-card') {
+            $out['paykka']      = $hosted;
+            $out['paykka-card'] = $card;
+            continue;
+        }
+        if ($id === 'paykka') {
+            continue;
+        }
+        $out[$id] = $gateway;
+    }
+    return $out;
+}
+add_filter('woocommerce_available_payment_gateways', 'paykka_prefer_hosted_before_card', 20);
+
+/**
+ * 进入结账页（整页加载）时：若 Session 仍记着 Credit Card，改回 Hosted（可用时），
+ * 实现「默认不选中 Card」；用户点击 Card 后再选中并加载。
+ */
+function paykka_checkout_default_away_from_card()
+{
+    if (is_admin() || wp_doing_ajax() || (defined('REST_REQUEST') && REST_REQUEST)) {
+        return;
+    }
+    if (!function_exists('is_checkout') || !is_checkout() || is_order_received_page()) {
+        return;
+    }
+    if (!function_exists('WC') || !WC()->session) {
+        return;
+    }
+    if (WC()->session->get('chosen_payment_method') !== 'paykka-card') {
+        return;
+    }
+    $gateways = WC()->payment_gateways()->get_available_payment_gateways();
+    if (!empty($gateways['paykka'])) {
+        WC()->session->set('chosen_payment_method', 'paykka');
+    } else {
+        WC()->session->set('chosen_payment_method', '');
+    }
+}
+add_action('template_redirect', 'paykka_checkout_default_away_from_card', 5);
 
 add_action('before_woocommerce_init', function () {
     if (class_exists(\Automattic\WooCommerce\Utilities\FeaturesUtil::class)) {

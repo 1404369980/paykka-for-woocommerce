@@ -28,13 +28,13 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
     {
         $this->id = 'paykka';
         $this->has_fields = false;
-        $this->version = '8.2.0';
+        $this->version = '1.5.3';
         $this->icon = '';
-        $this->method_description = __('结账页仅显示「Paykka」一项，顾客选择后跳转 Paykka Hosted 收银台完成支付。', 'paykka-for-woocommerce');
-        $this->method_title = __('Paykka', 'paykka-for-woocommerce');
+        $this->method_description = __('结账页显示「Paykka Hosted」，顾客选择后跳转 Paykka Hosted 收银台完成支付。', 'paykka-for-woocommerce');
+        $this->method_title = __('Paykka Hosted', 'paykka-for-woocommerce');
 
-        $this->title = __('Paykka', 'paykka-for-woocommerce');
-        $this->description = __('使用 Paykka 安全支付', 'paykka-for-woocommerce');
+        $this->title = __('Paykka Hosted', 'paykka-for-woocommerce');
+        $this->description = __('使用 Paykka Hosted 收银台安全支付', 'paykka-for-woocommerce');
 
         $this->supports = array(
             'products',
@@ -48,8 +48,8 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
         $this->init_settings();
 
         $this->enabled = get_option('paykka_enabled', 'yes');
-        $this->title = get_option('paykka_title', __('Paykka', 'paykka-for-woocommerce'));
-        $this->description = get_option('paykka_description', __('使用 Paykka 安全支付', 'paykka-for-woocommerce'));
+        $this->title = get_option('paykka_title', __('Paykka Hosted', 'paykka-for-woocommerce'));
+        $this->description = get_option('paykka_description', __('使用 Paykka Hosted 收银台安全支付', 'paykka-for-woocommerce'));
         $this->testmode = 'yes' === $this->get_option('testmode');
         $this->private_key = $this->testmode ? $this->get_option('sandbox_private_key') : $this->get_option('private_key');
 
@@ -57,7 +57,6 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
         $this->merchant_id = $this->testmode ? $this->get_option('sandbox_merchant_id') : $this->get_option('merchant_id');
         // 这个动作挂钩保存设置
         add_action('woocommerce_update_options_payment_gateways_' . $this->id, array($this, 'process_admin_options'));
-        add_action('woocommerce_receipt_' . $this->id, array($this, 'receipt_page'));
         add_action('woocommerce_order_refunded', 'paykka_attach_refund_link_on_order_refunded', 10, 2);
     }
 
@@ -293,6 +292,13 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
                         'id' => 'paykka_capture_method_flag'
                     ],
                     [
+                        'title'       => __('PayKKa 平台公钥（Webhook 验签）', 'paykka-for-woocommerce'),
+                        'type'        => 'textarea',
+                        'id'          => 'paykka_platform_public_key',
+                        'desc_tip'    => true,
+                        'description' => __('填写后将对 /wp-json/paykka/v1/webhook 强制校验 x-paykka-sign（SHA256_WITH_RSA）。留空则跳过验签（仅建议沙箱调试）。公钥见 PayKKa 开放平台文档。', 'paykka-for-woocommerce'),
+                    ],
+                    [
                         'type' => 'sectionend',
                         'id' => 'paykka_advanced_end'
                     ]
@@ -316,15 +322,15 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
                         'title'   => __('前台标题', 'paykka-for-woocommerce'),
                         'type'    => 'text',
                         'id'      => 'paykka_title',
-                        'default' => __('Paykka', 'paykka-for-woocommerce'),
+                        'default' => __('Paykka Hosted', 'paykka-for-woocommerce'),
                         'desc_tip' => true,
-                        'description' => __('结账时显示的支付方式名称', 'paykka-for-woocommerce'),
+                        'description' => __('结账时显示的 Hosted 支付方式名称', 'paykka-for-woocommerce'),
                     ),
                     array(
                         'title'   => __('前台描述', 'paykka-for-woocommerce'),
                         'type'    => 'textarea',
                         'id'      => 'paykka_description',
-                        'default' => __('使用 Paykka 安全支付', 'paykka-for-woocommerce'),
+                        'default' => __('使用 Paykka Hosted 收银台安全支付', 'paykka-for-woocommerce'),
                     ),
                     array(
                         'type' => 'sectionend',
@@ -336,6 +342,9 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
 
     public function payment_fields()
     {
+        if ($this->description) {
+            echo wpautop(wp_kses_post($this->description));
+        }
     }
 
     public function payment_scripts()
@@ -352,12 +361,6 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
         return $this->enabled === 'yes';
     }
 
-    public function receipt_page($order_id)
-    {
-
-    }
-
-
     public function process_payment($order_id)
     {
         ob_start();
@@ -367,8 +370,15 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
             return array('result' => 'failure', 'message' => __('Invalid order', 'paykka-for-woocommerce'));
         }
 
-        $order->update_meta_data('_paykka_sub_method', 'hosted');
-        $order->save();
+        // 每次 Hosted 发起必须新 trans_id（一 id 一 session；取消/失败重试不撞旧 Session）
+        $trans_id = function_exists('paykka_begin_payment_attempt')
+            ? paykka_begin_payment_attempt($order, 'hosted')
+            : '';
+        if ($trans_id === '') {
+            ob_end_clean();
+            wc_add_notice(__('Unable to start a new PayKKa payment for this order.', 'paykka-for-woocommerce'), 'error');
+            return array('result' => 'failure', 'message' => __('Unable to start payment', 'paykka-for-woocommerce'));
+        }
 
         require_once PAYKKA_PLUGIN_PATH . 'classes/lib/Paykka/Request/PaykkaRequestHandler.php';
         $paykkaPaymentHelper = new PaykkaRequestHandler();
@@ -381,7 +391,7 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
     {
         $response_data = $paykkaPaymentHelper->buildSessionUrl($order);
         if (function_exists('paykka_is_debug') && paykka_is_debug()) {
-            error_log('[Paykka Hosted] process_payment order_id=' . $order_id . ' response_data=' . wp_json_encode($response_data));
+            error_log('[Paykka Hosted] process_payment order_id=' . $order_id . ' trans_id=' . $order->get_meta('_paykka_trans_id', true) . ' response_data=' . wp_json_encode($response_data));
         }
         if ($response_data === null) {
             wc_add_notice(__('Payment request failed. Please try again or choose another payment method.', 'paykka-for-woocommerce'), 'error');
@@ -389,12 +399,17 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
         }
         if (isset($response_data['ret_code']) && $response_data['ret_code'] === '000000') {
             $session_url = isset($response_data['data']['session_url']) ? trim($response_data['data']['session_url']) : '';
+            $session_id  = isset($response_data['data']['session_id']) ? trim((string) $response_data['data']['session_id']) : '';
             if ($session_url === '') {
                 if (function_exists('paykka_is_debug') && paykka_is_debug()) {
                     error_log('[Paykka Hosted] session_url is empty, full response: ' . wp_json_encode($response_data));
                 }
                 wc_add_notice(__('Payment session created but redirect URL is missing. Please contact support.', 'paykka-for-woocommerce'), 'error');
                 return array('result' => 'failure', 'message' => __('Missing redirect URL', 'paykka-for-woocommerce'));
+            }
+            if ($session_id !== '') {
+                $order->update_meta_data('_paykka_session_id', sanitize_text_field($session_id));
+                $order->save();
             }
             WC()->cart->empty_cart();
             return array('result' => 'success', 'redirect' => $session_url);
@@ -427,7 +442,7 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
         $paykkaPaymentHelper = new PaykkaRequestHandler();
 
         // 先查询交易，判断当前订单是否可退款；并补齐 PayKKa order_id
-        $query_result = $paykkaPaymentHelper->queryPayment((string) $order_id, '', '');
+        $query_result = $paykkaPaymentHelper->queryPaymentForOrder($order);
         if (!is_array($query_result) || !isset($query_result['ret_code']) || $query_result['ret_code'] !== '000000') {
             $msg = is_array($query_result) && isset($query_result['ret_msg']) ? (string) $query_result['ret_msg'] : __('Payment query failed', 'paykka-for-woocommerce');
             return new \WP_Error('paykka_query_failed', $msg);

@@ -6,7 +6,7 @@
         s=window.wp.htmlEntities,
         a=window.wc.wcSettings,
         l=(0,a.getSetting)("paykka_data",{}),
-        o=(0,t.__)("paykka","paykka-for-woocommerce"),
+        o=(0,t.__)("Paykka Hosted","paykka-for-woocommerce"),
         c=(0,s.decodeEntities)(l.title)||o,
         w=()=>(0,s.decodeEntities)(l.description||""),
         y={

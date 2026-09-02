@@ -4,12 +4,9 @@ namespace lib\Paykka\Request;
 class PaykkaWebHookHandler
 {
     public static $WEB_HOOK_URL = '/paykka/v1/webhook';
-    /**
-     * 初始化 Webhook 处理类
-     */
+
     public function __construct()
     {
-        // 注册 Webhook 端点
         add_action('rest_api_init', array($this, 'register_webhook_endpoint'));
     }
 
@@ -18,33 +15,73 @@ class PaykkaWebHookHandler
         return rest_url(PaykkaWebHookHandler::$WEB_HOOK_URL);
     }
 
-
-    /**
-     * 注册 Webhook 端点
-     */
     public function register_webhook_endpoint()
     {
-        // error_log('Webhook endpoint registered'); // 调试日志
         register_rest_route('paykka/v1', '/webhook', array(
-            'methods' => 'POST',
-            'callback' => array($this, 'handle_paykka_webhook_request'),
+            'methods'             => 'POST',
+            'callback'            => array($this, 'handle_paykka_webhook_request'),
             'permission_callback' => '__return_true',
         ));
-        // error_log('注册webhook成功');
     }
-
 
     function handle_paykka_webhook_request($request)
     {
-        // 获取请求数据
         $payload = $request->get_body();
+
+        // 配置了平台公钥时必须验签（PayKKa SHA256_WITH_RSA）
+        $verify = $this->verify_webhook_request($request, $payload);
+        if ($verify === false) {
+            if (function_exists('paykka_is_debug') && paykka_is_debug()) {
+                error_log('[Paykka Webhook] Signature verification failed');
+            }
+            return new \WP_REST_Response(array('ret_code' => '401', 'ret_msg' => 'Invalid signature'), 401);
+        }
+
         $data = json_decode($payload, true);
         $this->process_payment_webhook($data);
         return new \WP_REST_Response(array('ret_code' => '000000', 'ret_msg' => 'Success'), 200);
     }
 
+    /**
+     * @param \WP_REST_Request $request
+     * @param string           $raw_body
+     * @return bool|null true=通过；false=失败；null=未配置公钥（跳过验签，兼容旧配置）
+     */
+    private function verify_webhook_request($request, $raw_body)
+    {
+        $public_key = trim((string) get_option('paykka_platform_public_key', ''));
+        if ($public_key === '') {
+            return null;
+        }
 
-    // 处理 Webhook 数据
+        $timestamp = $request->get_header('x-paykka-timestamp');
+        $nonce     = $request->get_header('x-paykka-nonce');
+        $sign      = $request->get_header('x-paykka-sign');
+        if ($timestamp === '' || $nonce === '' || $sign === '' || $timestamp === null || $nonce === null || $sign === null) {
+            return false;
+        }
+
+        $uri_path = '';
+        if (!empty($_SERVER['REQUEST_URI'])) {
+            $uri_path = (string) parse_url(wp_unslash($_SERVER['REQUEST_URI']), PHP_URL_PATH);
+        }
+        if ($uri_path === '') {
+            $uri_path = '/wp-json/paykka/v1/webhook';
+        }
+
+        require_once PAYKKA_PLUGIN_PATH . 'classes/lib/Paykka/Request/PaykkaRequestHandler.php';
+        $handler = new PaykkaRequestHandler();
+        return $handler->verifyPaykkaSignature(
+            'POST',
+            $uri_path,
+            (string) $timestamp,
+            (string) $nonce,
+            (string) $raw_body,
+            (string) $sign,
+            $public_key
+        );
+    }
+
     public function process_payment_webhook($webHookOrder)
     {
         if (!is_array($webHookOrder)) {
@@ -59,27 +96,35 @@ class PaykkaWebHookHandler
             return;
         }
 
-        if (empty($webHookOrder['trans_id'])) {
-            if (function_exists('paykka_is_debug') && paykka_is_debug()) {
-                error_log('[Paykka Webhook] Missing trans_id: ' . wp_json_encode($webHookOrder));
-            }
-            return;
-        }
-
-        $order_id = (int) $webHookOrder['trans_id'];
-        $payment_status = isset($webHookOrder['status']) ? (string) $webHookOrder['status'] : '';
-
-        $order = wc_get_order($order_id);
+        $order = $this->get_order_for_payment_webhook($webHookOrder);
         if (!$order || !$order->get_id()) {
             if (function_exists('paykka_is_debug') && paykka_is_debug()) {
-                error_log('[Paykka Webhook] Order not found: ' . $order_id);
+                error_log('[Paykka Webhook] Order not found: ' . wp_json_encode($webHookOrder));
             }
             return;
         }
+
+        $order_id = $order->get_id();
+        $payment_status = isset($webHookOrder['status']) ? (string) $webHookOrder['status'] : '';
+
+        // 若通知带了 GW order_id / session_id / trans_id，先写入 meta，便于后续查单
+        if (!empty($webHookOrder['order_id'])) {
+            $order->update_meta_data('_paykka_order_id', sanitize_text_field((string) $webHookOrder['order_id']));
+        }
+        if (!empty($webHookOrder['session_id'])) {
+            $order->update_meta_data('_paykka_session_id', sanitize_text_field((string) $webHookOrder['session_id']));
+        }
+        if (!empty($webHookOrder['trans_id'])) {
+            $ts = trim((string) $webHookOrder['trans_id']);
+            if ($ts !== '') {
+                $order->update_meta_data('_paykka_trans_id', sanitize_text_field($ts));
+            }
+        }
+        $order->save();
 
         require_once PAYKKA_PLUGIN_PATH . 'classes/lib/Paykka/Request/PaykkaRequestHandler.php';
         $paykkaPaymentHelper = new PaykkaRequestHandler();
-        $query_result = $paykkaPaymentHelper->queryPayment((string) $order_id, '', '');
+        $query_result = $paykkaPaymentHelper->queryPaymentForOrder($order);
         if (is_array($query_result) && isset($query_result['ret_code']) && $query_result['ret_code'] === '000000') {
             $paykkaPaymentHelper->syncOrderByQueryResult($order, $query_result, 'webhook');
             return;
@@ -98,11 +143,94 @@ class PaykkaWebHookHandler
     }
 
     /**
-     * 是否为退款类 Webhook（含官方事件名与旧版字段兜底）。
-     * - REFUND.SUCCESS：退款成功
-     * - REFUND.FAILURE：退款失败
-     * - 其他含 REFUND 的 event_type/notify_type，或仅有 refund 单号字段
+     * 支付 Webhook → Woo 订单：
+     * 1) PayKKa GW order_id → meta _paykka_order_id
+     * 2) payload.trans_id → meta _paykka_trans_id
+     * 3) 纯数字 trans_id → WC 订单号（Hosted）
+     * 4) 数字前缀（如 101c2026…）→ WC 订单号（Component）
+     *
+     * @param array $payload
+     * @return \WC_Order|null
      */
+    private function get_order_for_payment_webhook($payload)
+    {
+        if (!is_array($payload)) {
+            return null;
+        }
+
+        foreach (array('order_id') as $gw_key) {
+            if (empty($payload[$gw_key])) {
+                continue;
+            }
+            $gw_id = sanitize_text_field((string) $payload[$gw_key]);
+            if ($gw_id === '' || strpos($gw_id, 'GW') !== 0) {
+                // 非 GW 前缀时也尝试 meta（兼容）
+            }
+            if ($gw_id === '') {
+                continue;
+            }
+            $orders = wc_get_orders(array(
+                'limit'      => 1,
+                'meta_key'   => '_paykka_order_id',
+                'meta_value' => $gw_id,
+                'return'     => 'objects',
+            ));
+            if (!empty($orders) && is_a($orders[0], 'WC_Order')) {
+                return $orders[0];
+            }
+        }
+
+        if (!empty($payload['trans_id'])) {
+            $ts = trim((string) $payload['trans_id']);
+            if ($ts !== '') {
+                $orders = wc_get_orders(array(
+                    'limit'      => 1,
+                    'meta_key'   => '_paykka_trans_id',
+                    'meta_value' => $ts,
+                    'return'     => 'objects',
+                ));
+                if (!empty($orders) && is_a($orders[0], 'WC_Order')) {
+                    return $orders[0];
+                }
+
+                if (ctype_digit($ts)) {
+                    $order = wc_get_order(absint($ts));
+                    if ($order && $order->get_id()) {
+                        return $order;
+                    }
+                }
+
+                // Component: 101c20260901… → 101
+                if (preg_match('/^(\d+)/', $ts, $m)) {
+                    $oid = absint($m[1]);
+                    if ($oid > 0) {
+                        $order = wc_get_order($oid);
+                        if ($order && $order->get_id()) {
+                            return $order;
+                        }
+                    }
+                }
+            }
+        }
+
+        if (!empty($payload['session_id'])) {
+            $sid = sanitize_text_field((string) $payload['session_id']);
+            if ($sid !== '') {
+                $orders = wc_get_orders(array(
+                    'limit'      => 1,
+                    'meta_key'   => '_paykka_session_id',
+                    'meta_value' => $sid,
+                    'return'     => 'objects',
+                ));
+                if (!empty($orders) && is_a($orders[0], 'WC_Order')) {
+                    return $orders[0];
+                }
+            }
+        }
+
+        return null;
+    }
+
     private function is_refund_webhook_payload($payload)
     {
         return $this->parse_refund_webhook_event($payload) !== '';
@@ -139,15 +267,6 @@ class PaykkaWebHookHandler
     }
 
     /**
-     * 根据退款 Webhook 解析 Woo 订单。
-     *
-     * 事件类型：REFUND.SUCCESS（成功）、REFUND.FAILURE（失败）；可与 notify_type 同值。
-     *
-     * PayKKa 退款通知里三个易混字段：
-     * - trans_id：与退款接口入参 refund_trans_id 为同一商户退款流水号（如 R65-…）；仅当全为数字时才额外按 Woo 订单 ID 解析（兼容旧通知）。
-     * - order_id：原支付在 PayKKa 的订单号（GW…），与 Woo 订单 meta _paykka_order_id 一致，用于反查本站订单。
-     * - refund_order_id：本次退款在 PayKKa 的退款单号（RG…），用于 queryRefund、同步退款状态，不用于解析 Woo 订单。
-     *
      * @param array $payload
      * @return \WC_Order|null
      */
@@ -163,6 +282,10 @@ class PaykkaWebHookHandler
                         return $order;
                     }
                 }
+            }
+            // Component 支付原单：退款通知 trans_id 可能是退款流水，也可能带原单前缀
+            if ($ts !== '' && preg_match('/^(\d+)/', $ts, $m) && !ctype_digit($ts)) {
+                // 非纯数字时优先不按订单号猜，走 GW meta
             }
         }
         foreach (array('order_id', 'ori_order_id') as $gw_key) {
@@ -186,13 +309,6 @@ class PaykkaWebHookHandler
         return null;
     }
 
-    /**
-     * 处理退款 Webhook：收到通知后查询退款订单，再同步 Woo 订单。
-     * 事件：REFUND.SUCCESS（成功）、REFUND.FAILURE（失败）；字段含义见 get_order_for_refund_webhook()。
-     *
-     * @param array $webHookOrder
-     * @return void
-     */
     private function process_refund_webhook($webHookOrder)
     {
         $refund_event = $this->parse_refund_webhook_event($webHookOrder);
@@ -216,7 +332,6 @@ class PaykkaWebHookHandler
         $refund_trans_id = isset($webHookOrder['refund_trans_id']) ? trim((string) $webHookOrder['refund_trans_id']) : '';
         if ($refund_trans_id === '' && isset($webHookOrder['trans_id'])) {
             $ts = trim((string) $webHookOrder['trans_id']);
-            // Webhook 的 trans_id 与退款接口的 refund_trans_id 一致；纯数字时视为 Woo 订单号，不当作 refund_trans_id 传入查询。
             if ($ts !== '' && !ctype_digit($ts)) {
                 $refund_trans_id = $ts;
             }
@@ -253,20 +368,4 @@ class PaykkaWebHookHandler
         }
         $paykkaPaymentHelper->syncOrderByRefundQueryResult($order, $fallback_refund, $sync_source . '-fallback');
     }
-
-
-    /**
-     * 验证 Webhook 签名（若 Paykka 提供 secret 可在后台配置后在此校验）
-     * 当前 handle_paykka_webhook_request 未调用此方法，按需接入。
-     */
-    public function validate_webhook($data)
-    {
-        $secret = get_option('paykka_webhook_secret', '');
-        if ($secret === '' || empty($_SERVER['HTTP_X_PAYKKA_SIGNATURE'])) {
-            return false;
-        }
-        $expected = hash_hmac('sha256', is_string($data) ? $data : wp_json_encode($data), $secret);
-        return hash_equals($expected, sanitize_text_field(wp_unslash($_SERVER['HTTP_X_PAYKKA_SIGNATURE'])));
-    }
-
 }

@@ -123,7 +123,8 @@ if (!defined('PAYKKA_API_BASE_PROD')) {
     define('PAYKKA_API_BASE_PROD', 'https://openapi.eu.paykka.com');
 }
 if (!defined('PAYKKA_CHECKOUT_BASE_SANDBOX')) {
-    define('PAYKKA_CHECKOUT_BASE_SANDBOX', 'https://checkout-fat.eu.paykka.com');
+    // 与 PayKKa 文档 CDN 一致：https://docs.paykka.com/zh-hans/payments/docs/transaction/web/component-web
+    define('PAYKKA_CHECKOUT_BASE_SANDBOX', 'https://checkout-sandbox.aq.paykka.com');
 }
 if (!defined('PAYKKA_CHECKOUT_BASE_PROD')) {
     define('PAYKKA_CHECKOUT_BASE_PROD', 'https://checkout.eu.paykka.com');
@@ -199,6 +200,73 @@ function getPaykkaSettings()
     );
 }
 
+/**
+ * 生成一次性 Create Session 用的商户流水号（≤64）。
+ * 格式：{orderId}c{YmdHis}{rand3}；订单关联靠 meta，不靠反解析。
+ *
+ * @param \WC_Order|int $order
+ * @return string
+ */
+function paykka_new_trans_id($order)
+{
+    $order_id = is_object($order) && is_a($order, 'WC_Order') ? (int) $order->get_id() : absint($order);
+    $trans_id = $order_id . 'c' . gmdate('YmdHis') . wp_rand(100, 999);
+    if (strlen($trans_id) > 64) {
+        $trans_id = substr($order_id . 'c' . substr(md5(uniqid((string) $order_id, true)), 0, 12), 0, 64);
+    }
+    return $trans_id;
+}
+
+/**
+ * 开启新 Attempt：归档旧 trans/session，写入新 _paykka_trans_id，清空 session meta。
+ * Hosted / Card 每次真正 Create Session 前调用。
+ *
+ * @param \WC_Order $order
+ * @param string    $channel hosted|card
+ * @return string 新 trans_id；已支付订单返回空串
+ */
+function paykka_begin_payment_attempt($order, $channel = 'hosted')
+{
+    if (!$order || !is_a($order, 'WC_Order')) {
+        return '';
+    }
+
+    $gw = trim((string) $order->get_meta('_paykka_order_id', true));
+    if ($gw !== '' && $order->is_paid()) {
+        return '';
+    }
+
+    $old_trans   = trim((string) $order->get_meta('_paykka_trans_id', true));
+    $old_session = trim((string) $order->get_meta('_paykka_session_id', true));
+    if ($old_trans !== '' || $old_session !== '') {
+        $history = $order->get_meta('_paykka_attempt_history', true);
+        if (!is_array($history)) {
+            $history = array();
+        }
+        $history[] = array(
+            'trans_id'   => $old_trans,
+            'session_id' => $old_session,
+            'channel'    => (string) $order->get_meta('_paykka_sub_method', true),
+            'created_at' => gmdate('c'),
+            'status'     => 'superseded',
+        );
+        if (count($history) > 20) {
+            $history = array_slice($history, -20);
+        }
+        $order->update_meta_data('_paykka_attempt_history', $history);
+    }
+
+    $channel  = ($channel === 'card') ? 'card' : 'hosted';
+    $trans_id = paykka_new_trans_id($order);
+    $order->update_meta_data('_paykka_trans_id', $trans_id);
+    $order->update_meta_data('_paykka_sub_method', $channel);
+    $order->delete_meta_data('_paykka_session_id');
+    $order->delete_meta_data('_paykka_session_fingerprint');
+    $order->save();
+
+    return $trans_id;
+}
+
 /** @var string 订单 meta：待绑定到 WC 退款单的 PayKKa 流水队列（FIFO） */
 function paykka_refund_link_queue_meta_key()
 {
@@ -252,7 +320,7 @@ function paykka_attach_refund_link_on_order_refunded($order_id, $refund_id)
     if (!is_a($refund, 'WC_Order_Refund')) {
         return;
     }
-    if ($order->get_payment_method() !== 'paykka') {
+    if (!in_array($order->get_payment_method(), array('paykka', 'paykka-card'), true)) {
         return;
     }
     $key = paykka_refund_link_queue_meta_key();

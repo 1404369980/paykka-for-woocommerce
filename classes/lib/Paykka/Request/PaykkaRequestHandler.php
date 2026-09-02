@@ -286,7 +286,17 @@ class PaykkaRequestHandler
     }
 
     /**
-     * 创建收银台 Session（Hosted）
+     * 创建结账页内嵌 Card / Drop-in 用的 Session。
+     * 接口: POST /v3/payment/acq/session
+     * Card 组件推荐 session_mode=COMPONENT；Drop-in 使用 DROP_IN。见 PayKKa Component Web 文档。
+     */
+    public function buildDropInSession($order): mixed
+    {
+        return $this->handlerSession($order, 'COMPONENT');
+    }
+
+    /**
+     * 创建收银台 Session（Hosted / DROP_IN）
      * 接口: POST /v3/payment/acq/session
      */
     public function handlerSession($order, $session_mode)
@@ -298,7 +308,9 @@ class PaykkaRequestHandler
 
         $now = new \DateTime('now', new \DateTimeZone('UTC'));
         $now->setTimezone(new \DateTimeZone('Asia/Hong_Kong'));
-        $now->add(new \DateInterval('PT5M'));
+        // COMPONENT/结账页需要更长有效期，避免填写卡信息时过期；Hosted 保持较短
+        $ttl = ($session_mode === 'COMPONENT' || $session_mode === 'DROP_IN') ? 'PT30M' : 'PT5M';
+        $now->add(new \DateInterval($ttl));
         $expire_time = $now->format('Y-m-d\TH:i:sO');
 
         $callback_url = PaykkaCallBackHandler::getCallbackUrl($order->get_id());
@@ -311,7 +323,12 @@ class PaykkaRequestHandler
         $paymentRequest = new PaymentRequest();
         $paymentRequest->__set('merchant_id', $merchant_id);
         $paymentRequest->__set('payment_type', 'PURCHASE');
-        $paymentRequest->__set('trans_id', (string) $order->get_id());
+        // COMPONENT 每次需新 session；同一 trans_id 会返回旧 session，刷新后无法二次 init
+        $trans_id = trim((string) $order->get_meta('_paykka_trans_id', true));
+        if ($trans_id === '') {
+            $trans_id = (string) $order->get_id();
+        }
+        $paymentRequest->__set('trans_id', $trans_id);
         $paymentRequest->__set('currency', $order->get_currency());
         $paymentRequest->__set('amount', $order_amount);
         $paymentRequest->__set('notify_url', $notify_url);
@@ -323,11 +340,29 @@ class PaykkaRequestHandler
         $paykka_capture_method_flag = get_option('paykka_capture_method_flag');
         $paymentRequest->__set('capture_method', $paykka_capture_method_flag === 'yes' ? 'MANUAL' : 'AUTOMATIC');
 
+        // Embedded Payments：展示商户名；可用方式默认不限制（由商户开通决定），可用 filter 覆盖
+        if ($session_mode === 'COMPONENT') {
+            $merchant_name = get_bloginfo('name');
+            if (is_string($merchant_name) && $merchant_name !== '') {
+                $paymentRequest->__set('display_merchant_name', $merchant_name);
+            }
+            $allowed = apply_filters('paykka_component_allowed_payment_methods', null, $order);
+            if (is_array($allowed) && !empty($allowed)) {
+                $paymentRequest->__set('allowed_payment_methods', array_values($allowed));
+            }
+        }
+
         $paymentRequest->bill = $this->buildBill($order);
         $paymentRequest->shipping = $this->buildShipping($order);
         $paymentRequest->goods = $this->buildGoodsItems($order);
         $paymentRequest->customer = $this->buildCustomer($order);
-        $paymentRequest->payment = new PaymentInfo();
+        $payment = new PaymentInfo();
+        if ($session_mode === 'DROP_IN' && get_option('paykka_enable_saved_cards', 'no') === 'yes' && is_user_logged_in()) {
+            $payment->__set('store_payment_method', true);
+            $payment->__set('shopper_reference', 'wc_user_' . get_current_user_id());
+            $payment->__set('token_usage', 'CARD_ON_FILE');
+        }
+        $paymentRequest->payment = $payment;
 
         $http_body = $paymentRequest->toJson();
         $request_path = '/v3/payment/acq/session';
@@ -402,6 +437,117 @@ class PaykkaRequestHandler
 
         $api_result = $this->postApi($request_path, $http_body, $headers, 'PaymentQuery');
         return $this->parseV3Response($api_result, true);
+    }
+
+    /**
+     * 按 Woo 订单 meta 查交易：优先 GW order_id → _paykka_trans_id → session_id → WC 订单号。
+     * Component 的 trans_id 为「订单号c时间戳」时，不能只用 WC 订单号查。
+     *
+     * @param \WC_Order $order
+     * @return array
+     */
+    public function queryPaymentForOrder($order)
+    {
+        if (!$order || !is_a($order, 'WC_Order') || !$order->get_id()) {
+            return array('ret_code' => '400', 'ret_msg' => 'Invalid order');
+        }
+
+        $gw_order_id = trim((string) $order->get_meta('_paykka_order_id', true));
+        $trans_id    = trim((string) $order->get_meta('_paykka_trans_id', true));
+        $session_id  = trim((string) $order->get_meta('_paykka_session_id', true));
+        $wc_id       = (string) $order->get_id();
+
+        $attempts = array();
+        $seen     = array();
+        $push     = function ($t, $o, $s) use (&$attempts, &$seen) {
+            $key = $t . '|' . $o . '|' . $s;
+            if (isset($seen[$key])) {
+                return;
+            }
+            $seen[$key] = true;
+            $attempts[] = array($t, $o, $s);
+        };
+
+        if ($gw_order_id !== '') {
+            $push('', $gw_order_id, '');
+        }
+        if ($trans_id !== '') {
+            $push($trans_id, '', '');
+        }
+        if ($session_id !== '') {
+            $push('', '', $session_id);
+        }
+        $push($wc_id, '', '');
+
+        $last = array('ret_code' => '400', 'ret_msg' => 'Query failed');
+        foreach ($attempts as $attempt) {
+            $result = $this->queryPayment($attempt[0], $attempt[1], $attempt[2]);
+            $last   = $result;
+            if (is_array($result) && isset($result['ret_code']) && $result['ret_code'] === '000000') {
+                return $result;
+            }
+        }
+        return $last;
+    }
+
+    /**
+     * 规范化 PayKKa 平台公钥 PEM（Webhook 验签用）。
+     *
+     * @param string $key
+     * @return string|null
+     */
+    public function normalizePublicKeyPem($key)
+    {
+        $key = trim((string) $key);
+        if ($key === '') {
+            return null;
+        }
+        if (strpos($key, '-----BEGIN') === 0) {
+            return $key;
+        }
+        return "-----BEGIN PUBLIC KEY-----\n"
+            . chunk_split(str_replace(array("\r", "\n", " "), '', $key), 64, "\n")
+            . "-----END PUBLIC KEY-----\n";
+    }
+
+    /**
+     * 校验 Webhook / 回调请求的 SHA256_WITH_RSA 签名（PayKKa 平台公钥）。
+     * 文档: https://docs.paykka.com/payments/apis/introduction/api-certification
+     *
+     * @param string $method     HTTP method
+     * @param string $uri_path   请求 path（如 /wp-json/paykka/v1/webhook）
+     * @param string $timestamp  x-paykka-timestamp
+     * @param string $nonce      x-paykka-nonce
+     * @param string $body       原始 body
+     * @param string $sign_header x-paykka-sign（URLEncode + Base64）
+     * @param string $public_key 平台公钥
+     * @return bool
+     */
+    public function verifyPaykkaSignature($method, $uri_path, $timestamp, $nonce, $body, $sign_header, $public_key)
+    {
+        $method    = $method !== '' ? $method : ' ';
+        $uri_path  = $uri_path !== '' ? $uri_path : ' ';
+        $timestamp = (string) $timestamp;
+        $nonce     = $nonce !== '' ? $nonce : ' ';
+        $body      = ($body !== null && $body !== '') ? $body : ' ';
+        $content   = $method . "\n" . $uri_path . "\n" . $timestamp . "\n" . $nonce . "\n" . $body;
+
+        $pem = $this->normalizePublicKeyPem($public_key);
+        if ($pem === null) {
+            return false;
+        }
+        $key = openssl_pkey_get_public($pem);
+        if ($key === false) {
+            return false;
+        }
+
+        $sign = rawurldecode((string) $sign_header);
+        $bin  = base64_decode($sign, true);
+        if ($bin === false || $bin === '') {
+            return false;
+        }
+        $ok = openssl_verify($content, $bin, $key, OPENSSL_ALGO_SHA256);
+        return $ok === 1;
     }
 
     /**
@@ -539,6 +685,7 @@ class PaykkaRequestHandler
         }
         switch ($status) {
             case 'SUCCESS':
+                $order->update_meta_data('_paykka_component_paid', 'yes');
                 if (!in_array($order->get_status(), array('processing', 'completed'), true)) {
                     $order->payment_complete();
                 }
@@ -741,19 +888,42 @@ class PaykkaRequestHandler
     private function buildShipping($order)
     {
         $ship = new Shipping();
-        $ship->first_name = $order->get_shipping_first_name();
-        $ship->last_name = $order->get_shipping_last_name();
-        $ship->address_line1 = $order->get_shipping_address_1();
-        $ship->address_line2 = $order->get_shipping_address_2();
+        // 实物单常要求 shipping；仅有国家/州而无姓名地址时也回退账单（PayKKa Component 校验必填）
+        $first = (string) $order->get_shipping_first_name();
+        $last  = (string) $order->get_shipping_last_name();
+        $line1 = (string) $order->get_shipping_address_1();
+        $city  = (string) $order->get_shipping_city();
+        $post  = (string) $order->get_shipping_postcode();
+        $country = (string) $order->get_shipping_country();
+        $use_billing = ($last === '' || $line1 === '' || $city === '' || $post === '');
 
-        $ship->country = $order->get_shipping_country();
-        $ship->state = $order->get_shipping_state();
-        $ship->city = $order->get_shipping_city();
-        $ship->postal_code = $order->get_shipping_postcode();
+        $ship->first_name = $use_billing ? $order->get_billing_first_name() : $first;
+        $ship->last_name = $use_billing ? $order->get_billing_last_name() : $last;
+        $ship->address_line1 = $use_billing ? $order->get_billing_address_1() : $line1;
+        $ship->address_line2 = $use_billing ? $order->get_billing_address_2() : $order->get_shipping_address_2();
+        $ship->country = ($use_billing || $country === '') ? $order->get_billing_country() : $country;
+        $ship->state = $use_billing ? $order->get_billing_state() : $order->get_shipping_state();
+        $ship->city = $use_billing ? $order->get_billing_city() : $city;
+        $ship->postal_code = $use_billing ? $order->get_billing_postcode() : $post;
+        if ($ship->postal_code === '' || $ship->postal_code === null) {
+            $ship->postal_code = '000000';
+        }
+        if ($ship->last_name === '' || $ship->last_name === null) {
+            $ship->last_name = $ship->first_name !== '' ? $ship->first_name : 'Customer';
+        }
+        if ($ship->address_line1 === '' || $ship->address_line1 === null) {
+            $ship->address_line1 = 'N/A';
+        }
+        if ($ship->city === '' || $ship->city === null) {
+            $ship->city = 'N/A';
+        }
 
         $ship->area_code = '';
         $ship->phone_number = '';
         $ship_phone_number = $order->get_shipping_phone();
+        if ($ship_phone_number === null || $ship_phone_number === '') {
+            $ship_phone_number = $order->get_billing_phone();
+        }
         if ($ship_phone_number !== null && $ship_phone_number !== '') {
             $raw_phone = trim((string) $ship_phone_number);
             $phone_parts = preg_split('/\s+/', $raw_phone, 2);
@@ -770,9 +940,21 @@ class PaykkaRequestHandler
     private function buildCustomer($order)
     {
         $customer = new PayCustomer();
-        $customer->id = $order->get_user_id();
-        $customer->order_ip = $order->get_customer_ip_address() ?: '';
-        $customer->pay_ip = $order->get_customer_ip_address() ?: '127.0.0.1';
+        $customer->id = $order->get_user_id() ? (string) $order->get_user_id() : ('guest_' . $order->get_id());
+        $ip = $order->get_customer_ip_address();
+        if ($ip === '' || $ip === null) {
+            // 必须用全局类名：本文件在 namespace 下，裸写 WC_Geolocation 会解析失败并 fatal
+            $ip = class_exists('\\WC_Geolocation') ? \WC_Geolocation::get_ip_address() : '';
+        }
+        if ($ip === '' || $ip === null) {
+            $ip = isset($_SERVER['REMOTE_ADDR']) ? sanitize_text_field(wp_unslash($_SERVER['REMOTE_ADDR'])) : '127.0.0.1';
+        }
+        if ($ip === '' || $ip === null) {
+            $ip = '127.0.0.1';
+        }
+        $customer->order_ip = $ip;
+        $customer->pay_ip = $ip;
+        $customer->email = $order->get_billing_email();
         return $customer;
     }
 
