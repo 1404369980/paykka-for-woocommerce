@@ -227,8 +227,17 @@ class PaykkaRequestHandler
 
             if ($flatten_data) {
                 $query_data = isset($response_data['data']) && is_array($response_data['data']) ? $response_data['data'] : $response_data;
+                // 业务层 error_code / error_description 需保留：4032 代表「消费者尚未支付」
+                $biz_error_code = isset($query_data['error_code']) ? (string) $query_data['error_code'] : '';
+                $biz_error_desc = isset($query_data['error_description']) ? (string) $query_data['error_description'] : '';
                 unset($query_data['ret_code'], $query_data['ret_msg'], $query_data['error_code'], $query_data['error_description']);
                 $result = array_merge(array('ret_code' => '000000', 'ret_msg' => $ret_msg), $query_data);
+                if ($biz_error_code !== '') {
+                    $result['error_code'] = $biz_error_code;
+                }
+                if ($biz_error_desc !== '') {
+                    $result['error_description'] = $biz_error_desc;
+                }
                 $result['raw'] = $response_data;
                 return $result;
             }
@@ -440,8 +449,58 @@ class PaykkaRequestHandler
     }
 
     /**
+     * 判定查询结果的层级。
+     *
+     * PayKKa 收银台（session_id）只代表「支付意向」，最终结果由交易（order_id）决定；
+     * 未发起支付时 /payment/acq/query 会降级返回收银台状态（error_code=4032，
+     * 无 order_id），此时的 status=PROCESSING 只是「收银台已创建、待支付」，
+     * 绝不能当作交易处理中。
+     *
+     * 文档: https://docs.paykka.com/zh-hans/payments/docs/transaction/web/component-web
+     *
+     * @param array $query_result
+     * @return string transaction|session|unknown
+     */
+    public function getQueryResultLevel($query_result)
+    {
+        if (!is_array($query_result)) {
+            return 'unknown';
+        }
+        $order_id = '';
+        if (!empty($query_result['order_id'])) {
+            $order_id = trim((string) $query_result['order_id']);
+        } elseif (!empty($query_result['data']['order_id'])) {
+            $order_id = trim((string) $query_result['data']['order_id']);
+        }
+        return $order_id !== '' ? 'transaction' : 'session';
+    }
+
+    /**
+     * 查询结果是否明确表示「消费者尚未支付」（PayKKa error_code=4032）。
+     *
+     * @param array $query_result
+     * @return bool
+     */
+    public function isNotPaidYetResult($query_result)
+    {
+        if (!is_array($query_result)) {
+            return false;
+        }
+        $code = '';
+        if (isset($query_result['error_code'])) {
+            $code = trim((string) $query_result['error_code']);
+        } elseif (isset($query_result['data']['error_code'])) {
+            $code = trim((string) $query_result['data']['error_code']);
+        }
+        return $code === '4032';
+    }
+
+    /**
      * 按 Woo 订单 meta 查交易：优先 GW order_id → _paykka_trans_id → session_id → WC 订单号。
      * Component 的 trans_id 为「订单号c时间戳」时，不能只用 WC 订单号查。
+     *
+     * 只要拿到交易级结果（带 order_id）立即返回；若全部标识都只查到收银台级结果，
+     * 返回收银台级结果供上层判定「尚未支付」，但不得用于变更订单状态。
      *
      * @param \WC_Order $order
      * @return array
@@ -477,17 +536,28 @@ class PaykkaRequestHandler
         if ($session_id !== '') {
             $push('', '', $session_id);
         }
-        $push($wc_id, '', '');
+        // 仅在没有记录过 trans_id 的历史订单上回退到 WC 订单号，
+        // 否则可能命中同一订单早期 Attempt 甚至其它交易
+        if ($trans_id === '') {
+            $push($wc_id, '', '');
+        }
 
-        $last = array('ret_code' => '400', 'ret_msg' => 'Query failed');
+        $last          = array('ret_code' => '400', 'ret_msg' => 'Query failed');
+        $session_level = null;
         foreach ($attempts as $attempt) {
             $result = $this->queryPayment($attempt[0], $attempt[1], $attempt[2]);
             $last   = $result;
-            if (is_array($result) && isset($result['ret_code']) && $result['ret_code'] === '000000') {
+            if (!is_array($result) || !isset($result['ret_code']) || $result['ret_code'] !== '000000') {
+                continue;
+            }
+            if ($this->getQueryResultLevel($result) === 'transaction') {
                 return $result;
             }
+            if ($session_level === null) {
+                $session_level = $result;
+            }
         }
-        return $last;
+        return $session_level !== null ? $session_level : $last;
     }
 
     /**
@@ -659,7 +729,9 @@ class PaykkaRequestHandler
     // ========================================================================
 
     /**
-     * 根据交易查询结果同步 Woo 订单状态，并写入 PayKKa 订单号
+     * 根据交易查询结果同步 Woo 订单状态，并写入 PayKKa 订单号。
+     *
+     * 只有交易级结果（带 order_id）才能变更订单状态；收银台级结果只记录备注。
      */
     public function syncOrderByQueryResult($order, $query_result, $source = '')
     {
@@ -672,6 +744,11 @@ class PaykkaRequestHandler
             $status = strtoupper((string) $query_result['status']);
         } elseif (isset($query_result['data']['status'])) {
             $status = strtoupper((string) $query_result['data']['status']);
+        }
+
+        if ($this->getQueryResultLevel($query_result) !== 'transaction') {
+            $this->noteSessionOnlyResult($order, $status, $query_result, $source);
+            return;
         }
 
         $paykka_order_id = '';
@@ -727,6 +804,48 @@ class PaykkaRequestHandler
                 break;
         }
         $order->save();
+    }
+
+    /**
+     * 收银台（session）级结果：未产生网关交易，订单状态保持不变，只留一条去重备注。
+     *
+     * @param \WC_Order $order
+     * @param string    $status  收银台状态（PROCESSING = 已创建待支付，EXPIRED = 已过期）
+     * @param array     $query_result
+     * @param string    $source
+     */
+    private function noteSessionOnlyResult($order, $status, $query_result, $source = '')
+    {
+        $session_id = '';
+        if (!empty($query_result['session_id'])) {
+            $session_id = trim((string) $query_result['session_id']);
+        } elseif (!empty($query_result['data']['session_id'])) {
+            $session_id = trim((string) $query_result['data']['session_id']);
+        }
+
+        $reason = $this->isNotPaidYetResult($query_result)
+            ? 'customer has not paid'
+            : 'no gateway transaction yet';
+
+        $note = 'PayKKa session status: ' . ($status !== '' ? $status : 'UNKNOWN')
+            . ' (' . $reason . '; order status unchanged'
+            . ($source !== '' ? '; ' . $source : '') . ')';
+        if ($session_id !== '') {
+            $note .= ' session_id=' . $session_id;
+        }
+
+        // 回调/Webhook 可能反复触发，同一条备注只写一次
+        if ((string) $order->get_meta('_paykka_last_session_note', true) === $note) {
+            return;
+        }
+        $order->update_meta_data('_paykka_last_session_note', $note);
+        $order->add_order_note($note);
+        $order->save();
+
+        if (function_exists('paykka_is_debug') && paykka_is_debug()) {
+            error_log('[Paykka] session-level query result, order status kept. order=' . $order->get_id()
+                . ' status=' . $status . ' result=' . wp_json_encode($query_result));
+        }
     }
 
     /**

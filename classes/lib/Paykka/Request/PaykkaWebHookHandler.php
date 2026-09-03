@@ -116,7 +116,8 @@ class PaykkaWebHookHandler
         }
         if (!empty($webHookOrder['trans_id'])) {
             $ts = trim((string) $webHookOrder['trans_id']);
-            if ($ts !== '') {
+            // 迟到的通知可能属于已被取代的 Attempt，不能覆盖当前 Attempt 的 trans_id
+            if ($ts !== '' && trim((string) $order->get_meta('_paykka_trans_id', true)) === '') {
                 $order->update_meta_data('_paykka_trans_id', sanitize_text_field($ts));
             }
         }
@@ -133,11 +134,17 @@ class PaykkaWebHookHandler
         if (function_exists('paykka_is_debug') && paykka_is_debug()) {
             error_log('[Paykka Webhook] Query failed fallback to payload status. order_id=' . $order_id . ' query=' . wp_json_encode($query_result));
         }
-        $fallback_result = array(
-            'status' => $payment_status,
-        );
+
+        // 通知体带 order_id 才是交易级结果；否则只记录，订单状态以网关交易为准
+        $fallback_result = array('status' => $payment_status);
         if (!empty($webHookOrder['order_id'])) {
             $fallback_result['order_id'] = (string) $webHookOrder['order_id'];
+        }
+        if (!empty($webHookOrder['session_id'])) {
+            $fallback_result['session_id'] = (string) $webHookOrder['session_id'];
+        }
+        if (!empty($webHookOrder['error_code'])) {
+            $fallback_result['error_code'] = (string) $webHookOrder['error_code'];
         }
         $paykkaPaymentHelper->syncOrderByQueryResult($order, $fallback_result, 'webhook-fallback');
     }

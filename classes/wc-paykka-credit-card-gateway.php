@@ -28,13 +28,13 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
     {
         $this->id = 'paykka';
         $this->has_fields = false;
-        $this->version = '1.5.11';
+        $this->version = '1.5.12';
         $this->icon = '';
-        $this->method_description = __('结账页显示「Paykka Hosted」，顾客选择后跳转 Paykka Hosted 收银台完成支付。', 'paykka-for-woocommerce');
+        $this->method_description = __('Shows “Paykka Hosted” at checkout. Customers are redirected to the Paykka Hosted checkout to complete the payment.', 'paykka-for-woocommerce');
         $this->method_title = __('Paykka Hosted', 'paykka-for-woocommerce');
 
         $this->title = __('Paykka Hosted', 'paykka-for-woocommerce');
-        $this->description = __('使用 Paykka Hosted 收银台安全支付', 'paykka-for-woocommerce');
+        $this->description = __('Pay securely with the Paykka Hosted checkout', 'paykka-for-woocommerce');
 
         $this->supports = array(
             'products',
@@ -49,7 +49,9 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
 
         $this->enabled = get_option('paykka_enabled', 'yes');
         $this->title = get_option('paykka_title', __('Paykka Hosted', 'paykka-for-woocommerce'));
-        $this->description = get_option('paykka_description', __('使用 Paykka Hosted 收银台安全支付', 'paykka-for-woocommerce'));
+        $this->description = function_exists('paykka_get_hosted_text')
+            ? paykka_get_hosted_text('paykka_description', __('Pay securely with the Paykka Hosted checkout', 'paykka-for-woocommerce'))
+            : get_option('paykka_description', __('Pay securely with the Paykka Hosted checkout', 'paykka-for-woocommerce'));
         $this->testmode = 'yes' === $this->get_option('testmode');
         $this->private_key = $this->testmode ? $this->get_option('sandbox_private_key') : $this->get_option('private_key');
 
@@ -152,9 +154,9 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
         echo '<nav class="nav-tab-wrapper">';
 
         $tabs = array(
-            'connection' => __('连接设置', 'paykka-for-woocommerce'),
-            'standard'   => __('标准支付', 'paykka-for-woocommerce'),
-            'advanced'   => __('高级设置', 'paykka-for-woocommerce'),
+            'connection' => __('Connection settings', 'paykka-for-woocommerce'),
+            'standard'   => __('Standard payments', 'paykka-for-woocommerce'),
+            'advanced'   => __('Advanced settings', 'paykka-for-woocommerce'),
         );
 
         foreach ($tabs as $key => $label) {
@@ -191,7 +193,7 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
             case 'standard':
                 return [
                     [
-                        'title' => '连接设置',
+                        'title' => __('Connection settings', 'paykka-for-woocommerce'),
                         'type' => 'title',
                         'id' => 'paykka_conn_title'
                     ],
@@ -200,7 +202,7 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
                         'type' => 'checkbox',
                         'id' => 'paykka_sandbox_flag',
                         'desc_tip' => true,
-                        'description' => __('未勾选为生产、勾选为测试。可通过 paykka-config.php（env）或 wp-config 常量 PAYKKA_ENV 选择环境，优先级高于本勾选。', 'paykka-for-woocommerce'),
+                        'description' => __('Unchecked means production, checked means test. The environment can also be set in paykka-config.php (env) or with the PAYKKA_ENV constant in wp-config, both of which take precedence over this checkbox.', 'paykka-for-woocommerce'),
                     ],
                     [
                         'title' => 'Sandbox Private Key',
@@ -217,7 +219,7 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
                         'type' => 'text',
                         'id' => 'paykka_sandbox_app_id',
                         'desc_tip' => true,
-                        'description' => __('可选，不填则使用 Sandbox Merchant Id。用于 v3 接口请求头。', 'paykka-for-woocommerce'),
+                        'description' => __('Optional. Falls back to the Sandbox Merchant Id. Used in the v3 API request headers.', 'paykka-for-woocommerce'),
                     ],
                     [
                         'title' => 'Sandbox Client Key',
@@ -239,7 +241,7 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
                         'type' => 'text',
                         'id' => 'paykka_app_id',
                         'desc_tip' => true,
-                        'description' => __('可选，不填则使用 Merchant Id。用于 v3 接口请求头。', 'paykka-for-woocommerce'),
+                        'description' => __('Optional. Falls back to the Merchant Id. Used in the v3 API request headers.', 'paykka-for-woocommerce'),
                     ],
                     [
                         'title' => 'Live Client Key',
@@ -247,16 +249,16 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
                         'id' => 'paykka_client_key'
                     ],
                     [
-                        'title'   => __('API 地区', 'paykka-for-woocommerce'),
+                        'title'   => __('API region', 'paykka-for-woocommerce'),
                         'type'    => 'select',
                         'id'      => 'paykka_api_region',
                         'default' => 'eu',
                         'options' => array(
-                            'eu' => __('欧洲地区 (https://openapi.eu.paykka.com)', 'paykka-for-woocommerce'),
-                            'hk' => __('香港地区 (https://openapi.aq.paykka.com)', 'paykka-for-woocommerce'),
+                            'eu' => __('Europe (https://openapi.eu.paykka.com)', 'paykka-for-woocommerce'),
+                            'hk' => __('Hong Kong (https://openapi.aq.paykka.com)', 'paykka-for-woocommerce'),
                         ),
                         'desc_tip' => true,
-                        'description' => __('生产环境下后端 API 调用使用的区域。欧洲与香港使用不同域名，请与 Paykka 账户所在区域一致。', 'paykka-for-woocommerce'),
+                        'description' => __('Region used for backend API calls in production. Europe and Hong Kong use different domains, so this must match the region of your Paykka account.', 'paykka-for-woocommerce'),
                     ],
                     [
                         'type' => 'sectionend',
@@ -266,37 +268,37 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
             case 'advanced':
                 return [
                     [
-                        'title' => '高级设置',
+                        'title' => __('Advanced settings', 'paykka-for-woocommerce'),
                         'type' => 'title',
                         'id' => 'paykka_advanced_title'
                     ],
                     [
-                        'title' => '开启 Debug 模式',
+                        'title' => __('Enable debug mode', 'paykka-for-woocommerce'),
                         'type' => 'checkbox',
                         'id' => 'paykka_debug_mode',
                         'default' => 'yes',
                         'desc_tip' => true,
-                        'description' => __('开发 Paykka 插件时建议勾选。将输出详细 error_log（下单、Webhook、签名等），便于排查。上线后请关闭。', 'paykka-for-woocommerce'),
+                        'description' => __('Recommended while developing. Writes detailed entries to error_log (order placement, webhooks, signatures) to help troubleshooting. Turn it off in production.', 'paykka-for-woocommerce'),
                     ],
                     [
-                        'title' => '记录请求结果日志',
+                        'title' => __('Log request results', 'paykka-for-woocommerce'),
                         'type' => 'checkbox',
                         'id' => 'paykka_log_request_result',
                         'default' => 'yes',
                         'desc_tip' => true,
-                        'description' => __('开启后，每次 Paykka 接口请求的 URL、HTTP 状态码和响应体会写入 PHP error_log，便于排查。需在服务器或 wp-config 中配置 error_log 输出位置。', 'paykka-for-woocommerce'),
+                        'description' => __('When enabled, the URL, HTTP status code and response body of every Paykka API request are written to the PHP error_log. Make sure error_log output is configured on the server or in wp-config.', 'paykka-for-woocommerce'),
                     ],
                     [
-                        'title' => '仅授权',
+                        'title' => __('Authorise only', 'paykka-for-woocommerce'),
                         'type' => 'checkbox',
                         'id' => 'paykka_capture_method_flag'
                     ],
                     [
-                        'title'       => __('PayKKa 平台公钥（Webhook 验签）', 'paykka-for-woocommerce'),
+                        'title'       => __('PayKKa platform public key (webhook signature)', 'paykka-for-woocommerce'),
                         'type'        => 'textarea',
                         'id'          => 'paykka_platform_public_key',
                         'desc_tip'    => true,
-                        'description' => __('填写后将对 /wp-json/paykka/v1/webhook 强制校验 x-paykka-sign（SHA256_WITH_RSA）。留空则跳过验签（仅建议沙箱调试）。公钥见 PayKKa 开放平台文档。', 'paykka-for-woocommerce'),
+                        'description' => __('When set, x-paykka-sign (SHA256_WITH_RSA) is enforced on /wp-json/paykka/v1/webhook. Leave it empty to skip verification (sandbox debugging only). The public key is available in the PayKKa developer documentation.', 'paykka-for-woocommerce'),
                     ],
                     [
                         'type' => 'sectionend',
@@ -307,30 +309,30 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
             default:
                 return array(
                     array(
-                        'title' => __('连接设置', 'paykka-for-woocommerce'),
+                        'title' => __('Connection settings', 'paykka-for-woocommerce'),
                         'type'  => 'title',
                         'id'    => 'paykka_conn_title',
                     ),
                     array(
-                        'title'   => __('启用/禁用', 'paykka-for-woocommerce'),
+                        'title'   => __('Enable/Disable', 'paykka-for-woocommerce'),
                         'type'    => 'checkbox',
                         'id'      => 'paykka_enabled',
                         'default' => 'yes',
-                        'desc'    => __('启用 Paykka 支付', 'paykka-for-woocommerce'),
+                        'desc'    => __('Enable Paykka payments', 'paykka-for-woocommerce'),
                     ),
                     array(
-                        'title'   => __('前台标题', 'paykka-for-woocommerce'),
+                        'title'   => __('Title', 'paykka-for-woocommerce'),
                         'type'    => 'text',
                         'id'      => 'paykka_title',
                         'default' => __('Paykka Hosted', 'paykka-for-woocommerce'),
                         'desc_tip' => true,
-                        'description' => __('结账时显示的 Hosted 支付方式名称', 'paykka-for-woocommerce'),
+                        'description' => __('Name of the Hosted payment method shown at checkout', 'paykka-for-woocommerce'),
                     ),
                     array(
-                        'title'   => __('前台描述', 'paykka-for-woocommerce'),
+                        'title'   => __('Description', 'paykka-for-woocommerce'),
                         'type'    => 'textarea',
                         'id'      => 'paykka_description',
-                        'default' => __('使用 Paykka Hosted 收银台安全支付', 'paykka-for-woocommerce'),
+                        'default' => __('Pay securely with the Paykka Hosted checkout', 'paykka-for-woocommerce'),
                     ),
                     array(
                         'type' => 'sectionend',
@@ -454,6 +456,14 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
             return new \WP_Error('paykka_query_failed', $msg);
         }
         $paykkaPaymentHelper->syncOrderByQueryResult($order, $query_result, 'refund-check');
+
+        // 只查到收银台状态说明还没产生网关交易，无从退款
+        if ($paykkaPaymentHelper->getQueryResultLevel($query_result) !== 'transaction') {
+            return new \WP_Error(
+                'paykka_no_transaction',
+                __('No PayKKa gateway transaction has been found for this order yet, so it cannot be refunded.', 'paykka-for-woocommerce')
+            );
+        }
 
         $status = isset($query_result['status']) ? strtoupper((string) $query_result['status']) : '';
         if (!in_array($status, array('SUCCESS', 'AUTHORIZED', 'PARTIALLY_REFUNDED'), true)) {

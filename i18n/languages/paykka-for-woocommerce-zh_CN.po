@@ -1,0 +1,349 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: PayKKa for WooCommerce 1.5.12\n"
+"Report-Msgid-Bugs-To: \n"
+"PO-Revision-Date: 2026-09-03 17:35+0800\n"
+"Last-Translator: PayKKa for WooCommerce\n"
+"Language-Team: Chinese (China)\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Language: zh_CN\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"X-Domain: paykka-for-woocommerce\n"
+
+#: classes/admin/class-paykka-order-list.php:38
+#: classes/admin/class-paykka-order-list.php:42
+#: classes/admin/class-paykka-order-list.php:104
+#. Brand / product name: intentionally not localised.
+msgid "PayKKa Order ID"
+msgstr "PayKKa Order ID"
+
+#: classes/utils/class-paykka-utils.php:303
+#, php-format
+msgid "PayKKa place order (%s)"
+msgstr "PayKKa 发起支付（%s）"
+
+#: classes/lib/Paykka/Request/PaykkaRequestHandler.php:380
+msgid "Payment signature error"
+msgstr "支付签名错误"
+
+#: classes/lib/Paykka/Request/PaykkaRequestHandler.php:951
+msgid "PayKKa: The local WooCommerce refund record was automatically removed."
+msgstr "PayKKa：已自动移除本地 WooCommerce 退款记录。"
+
+#: classes/lib/Paykka/Request/PaykkaCallBackHandler.php:80
+msgid "The payment was not successful. Please try again or choose another payment method."
+msgstr "支付未成功，请重试或更换支付方式。"
+
+#: classes/lib/Paykka/Request/PaykkaCallBackHandler.php:82
+msgid "We have not received your payment yet. Please start the payment again."
+msgstr "尚未收到您的付款，请重新发起支付。"
+
+#: classes/lib/Paykka/Request/PaykkaCallBackHandler.php:84
+msgid "Your payment is still being confirmed. Please refresh in a moment or contact support."
+msgstr "支付结果确认中，请稍候刷新或联系客服。"
+
+#: classes/lib/Paykka/Request/PaykkaCallBackHandler.php:102
+msgid "We cannot confirm the payment result right now. Please try again later or contact support."
+msgstr "暂时无法确认支付结果，请稍后再试或联系客服。"
+
+#: classes/wc-paykka-card-gateway.php:20
+msgid "Paykka Payments"
+msgstr "Paykka Payments"
+
+#: classes/wc-paykka-card-gateway.php:21
+msgid "Embedded Payments (card / Apple Pay / Google Pay) inside the WooCommerce Blocks checkout. Selecting it shows the payment components, and customers pay by placing the order or using a wallet button. Paykka Hosted is unaffected."
+msgstr "WooCommerce Blocks 结账页内嵌 Payments（银行卡 / Apple Pay / Google Pay）。选中后展示支付组件，点击下单或钱包按钮完成支付。不影响 Paykka Hosted。"
+
+#: classes/wc-paykka-card-gateway.php:28 classes/wc-paykka-card-gateway.php:48
+#: classes/wc-paykka-card-gateway.php:79
+#: includes/blocks/wc-gateway-paykka-card-support.php:80
+#. Brand / product name: intentionally not localised.
+msgid "Payments"
+msgstr "Payments"
+
+#: classes/wc-paykka-card-gateway.php:39
+#: classes/wc-paykka-credit-card-gateway.php:315
+msgid "Enable/Disable"
+msgstr "启用/禁用"
+
+#: classes/wc-paykka-card-gateway.php:41
+msgid "Enable Paykka Payments (embedded)"
+msgstr "启用 Paykka Payments（内嵌）"
+
+#: classes/wc-paykka-card-gateway.php:45
+#: classes/wc-paykka-credit-card-gateway.php:322
+msgid "Title"
+msgstr "标题"
+
+#: classes/wc-paykka-card-gateway.php:47
+msgid "Name of the payment method shown at checkout"
+msgstr "结账页显示的支付方式名称"
+
+#: classes/wc-paykka-card-gateway.php:52
+msgid "Enable saved cards"
+msgstr "启用保存卡"
+
+#: classes/wc-paykka-card-gateway.php:54
+msgid "Let logged-in customers choose to save their payment details (requires account-side support)"
+msgstr "允许已登录顾客勾选保存支付信息（需账户侧支持）"
+
+#: classes/wc-paykka-card-gateway.php:87
+msgid "Please use the Blocks checkout page to pay with Payments."
+msgstr "请使用 Blocks 结账页完成 Payments 支付。"
+
+#: classes/wc-paykka-card-gateway.php:98 classes/wc-paykka-card-gateway.php:130
+msgid "Security check failed. Please refresh the checkout page and try again."
+msgstr "安全校验失败，请刷新结账页后重试。"
+
+#: classes/wc-paykka-card-gateway.php:133
+msgid "Session unavailable"
+msgstr "会话不可用"
+
+#: classes/wc-paykka-card-gateway.php:141
+msgid "Order not found"
+msgstr "未找到订单"
+
+#: classes/wc-paykka-card-gateway.php:158
+msgid "Your cart is empty or the checkout session has expired."
+msgstr "购物车为空或结账会话已过期。"
+
+#: classes/wc-paykka-card-gateway.php:163
+msgid "Please select Payments before continuing."
+msgstr "请选择 Payments 后再继续。"
+
+#: classes/wc-paykka-card-gateway.php:214
+#: classes/wc-paykka-credit-card-gateway.php:379
+msgid "Unable to start a new PayKKa payment for this order."
+msgstr "无法为该订单发起新的 PayKKa 支付。"
+
+#: classes/wc-paykka-card-gateway.php:223
+msgid "Could not create the PayKKa payment session. Please try again later."
+msgstr "PayKKa 支付会话创建失败，请稍后重试。"
+
+#: classes/wc-paykka-card-gateway.php:245
+#: classes/wc-paykka-credit-card-gateway.php:370
+#: classes/wc-paykka-credit-card-gateway.php:441
+msgid "Invalid order"
+msgstr "订单无效"
+
+#: classes/wc-paykka-card-gateway.php:254
+msgid "Please enter complete card details and finish the payment before placing the order."
+msgstr "请填写完整的银行卡信息并完成支付后再下单。"
+
+#: classes/wc-paykka-card-gateway.php:271
+msgid "Paykka gateway unavailable"
+msgstr "Paykka 网关不可用"
+
+#: classes/wc-paykka-card-gateway.php:316
+msgid "Please enter a valid billing email address."
+msgstr "请填写有效的账单邮箱。"
+
+#: classes/wc-paykka-card-gateway.php:319
+msgid "Please select a billing country/region."
+msgstr "请选择账单国家/地区。"
+
+#: classes/wc-paykka-card-gateway.php:324
+msgid "The billing postcode / ZIP is invalid. Please correct it for the selected country/region before paying."
+msgstr "账单邮编 / ZIP 格式不正确，请按国家/地区要求修改后再支付。"
+
+#: classes/wc-paykka-card-gateway.php:330
+msgid "The billing phone number is invalid."
+msgstr "账单电话号码格式不正确。"
+
+#: classes/wc-paykka-credit-card-gateway.php:33
+msgid "Shows “Paykka Hosted” at checkout. Customers are redirected to the Paykka Hosted checkout to complete the payment."
+msgstr "结账页显示「Paykka Hosted」，顾客选择后跳转 Paykka Hosted 收银台完成支付。"
+
+#: classes/wc-paykka-credit-card-gateway.php:34
+#: classes/wc-paykka-credit-card-gateway.php:36
+#: classes/wc-paykka-credit-card-gateway.php:51
+#: classes/wc-paykka-credit-card-gateway.php:325
+#: includes/blocks/wc-gateway-paykka-support.php:16
+msgid "Paykka Hosted"
+msgstr "Paykka Hosted"
+
+#: classes/wc-paykka-credit-card-gateway.php:37
+#: classes/wc-paykka-credit-card-gateway.php:52
+#: classes/wc-paykka-credit-card-gateway.php:333
+#: includes/blocks/wc-gateway-paykka-support.php:17
+msgid "Pay securely with the Paykka Hosted checkout"
+msgstr "使用 Paykka Hosted 收银台安全支付"
+
+#: classes/wc-paykka-credit-card-gateway.php:155
+#: classes/wc-paykka-credit-card-gateway.php:194
+#: classes/wc-paykka-credit-card-gateway.php:310
+msgid "Connection settings"
+msgstr "连接设置"
+
+#: classes/wc-paykka-credit-card-gateway.php:156
+msgid "Standard payments"
+msgstr "标准支付"
+
+#: classes/wc-paykka-credit-card-gateway.php:157
+#: classes/wc-paykka-credit-card-gateway.php:269
+msgid "Advanced settings"
+msgstr "高级设置"
+
+#: classes/wc-paykka-credit-card-gateway.php:203
+msgid "Unchecked means production, checked means test. The environment can also be set in paykka-config.php (env) or with the PAYKKA_ENV constant in wp-config, both of which take precedence over this checkbox."
+msgstr "未勾选为生产、勾选为测试。可通过 paykka-config.php（env）或 wp-config 常量 PAYKKA_ENV 选择环境，优先级高于本勾选。"
+
+#: classes/wc-paykka-credit-card-gateway.php:220
+msgid "Optional. Falls back to the Sandbox Merchant Id. Used in the v3 API request headers."
+msgstr "可选，不填则使用 Sandbox Merchant Id。用于 v3 接口请求头。"
+
+#: classes/wc-paykka-credit-card-gateway.php:242
+msgid "Optional. Falls back to the Merchant Id. Used in the v3 API request headers."
+msgstr "可选，不填则使用 Merchant Id。用于 v3 接口请求头。"
+
+#: classes/wc-paykka-credit-card-gateway.php:250
+msgid "API region"
+msgstr "API 地区"
+
+#: classes/wc-paykka-credit-card-gateway.php:255
+msgid "Europe (https://openapi.eu.paykka.com)"
+msgstr "欧洲地区 (https://openapi.eu.paykka.com)"
+
+#: classes/wc-paykka-credit-card-gateway.php:256
+msgid "Hong Kong (https://openapi.aq.paykka.com)"
+msgstr "香港地区 (https://openapi.aq.paykka.com)"
+
+#: classes/wc-paykka-credit-card-gateway.php:259
+msgid "Region used for backend API calls in production. Europe and Hong Kong use different domains, so this must match the region of your Paykka account."
+msgstr "生产环境下后端 API 调用使用的区域。欧洲与香港使用不同域名，请与 Paykka 账户所在区域一致。"
+
+#: classes/wc-paykka-credit-card-gateway.php:274
+msgid "Enable debug mode"
+msgstr "开启 Debug 模式"
+
+#: classes/wc-paykka-credit-card-gateway.php:279
+msgid "Recommended while developing. Writes detailed entries to error_log (order placement, webhooks, signatures) to help troubleshooting. Turn it off in production."
+msgstr "开发 Paykka 插件时建议勾选。将输出详细 error_log（下单、Webhook、签名等），便于排查。上线后请关闭。"
+
+#: classes/wc-paykka-credit-card-gateway.php:282
+msgid "Log request results"
+msgstr "记录请求结果日志"
+
+#: classes/wc-paykka-credit-card-gateway.php:287
+msgid "When enabled, the URL, HTTP status code and response body of every Paykka API request are written to the PHP error_log. Make sure error_log output is configured on the server or in wp-config."
+msgstr "开启后，每次 Paykka 接口请求的 URL、HTTP 状态码和响应体会写入 PHP error_log，便于排查。需在服务器或 wp-config 中配置 error_log 输出位置。"
+
+#: classes/wc-paykka-credit-card-gateway.php:290
+msgid "Authorise only"
+msgstr "仅授权"
+
+#: classes/wc-paykka-credit-card-gateway.php:295
+msgid "PayKKa platform public key (webhook signature)"
+msgstr "PayKKa 平台公钥（Webhook 验签）"
+
+#: classes/wc-paykka-credit-card-gateway.php:299
+msgid "When set, x-paykka-sign (SHA256_WITH_RSA) is enforced on /wp-json/paykka/v1/webhook. Leave it empty to skip verification (sandbox debugging only). The public key is available in the PayKKa developer documentation."
+msgstr "填写后将对 /wp-json/paykka/v1/webhook 强制校验 x-paykka-sign（SHA256_WITH_RSA）。留空则跳过验签（仅建议沙箱调试）。公钥见 PayKKa 开放平台文档。"
+
+#: classes/wc-paykka-credit-card-gateway.php:319
+msgid "Enable Paykka payments"
+msgstr "启用 Paykka 支付"
+
+#: classes/wc-paykka-credit-card-gateway.php:327
+msgid "Name of the Hosted payment method shown at checkout"
+msgstr "结账时显示的 Hosted 支付方式名称"
+
+#: classes/wc-paykka-credit-card-gateway.php:330
+msgid "Description"
+msgstr "描述"
+
+#: classes/wc-paykka-credit-card-gateway.php:380
+msgid "Unable to start payment"
+msgstr "无法发起支付"
+
+#: classes/wc-paykka-credit-card-gateway.php:397
+msgid "Payment request failed. Please try again or choose another payment method."
+msgstr "支付请求失败，请重试或更换支付方式。"
+
+#: classes/wc-paykka-credit-card-gateway.php:398
+msgid "Payment request failed"
+msgstr "支付请求失败"
+
+#: classes/wc-paykka-credit-card-gateway.php:407
+msgid "Payment session created but redirect URL is missing. Please contact support."
+msgstr "支付会话已创建但缺少跳转地址，请联系客服。"
+
+#: classes/wc-paykka-credit-card-gateway.php:408
+msgid "Missing redirect URL"
+msgstr "缺少跳转地址"
+
+#: classes/wc-paykka-credit-card-gateway.php:423
+msgid "Payment session failed"
+msgstr "支付会话创建失败"
+
+#: classes/wc-paykka-credit-card-gateway.php:444
+#: classes/wc-paykka-credit-card-gateway.php:478
+msgid "Invalid refund amount"
+msgstr "退款金额无效"
+
+#: classes/wc-paykka-credit-card-gateway.php:453
+msgid "Payment query failed"
+msgstr "交易查询失败"
+
+#: classes/wc-paykka-credit-card-gateway.php:462
+msgid "No PayKKa gateway transaction has been found for this order yet, so it cannot be refunded."
+msgstr "尚未查询到该订单的 PayKKa 网关交易，无法退款。"
+
+#: classes/wc-paykka-credit-card-gateway.php:468
+#, php-format
+msgid "Order status %s is not refundable"
+msgstr "订单状态 %s 不支持退款"
+
+#: classes/wc-paykka-credit-card-gateway.php:481
+msgid "Refund amount exceeds available refundable amount"
+msgstr "退款金额超出可退金额"
+
+#: classes/wc-paykka-credit-card-gateway.php:490
+msgid "Refund request failed"
+msgstr "退款请求失败"
+
+#: woocommerce-paykka-gateway.php:97 woocommerce-paykka-gateway.php:112
+msgid "WooCommerce unavailable"
+msgstr "WooCommerce 不可用"
+
+#: woocommerce-paykka-gateway.php:101
+msgid "Credit Card gateway unavailable"
+msgstr "银行卡网关不可用"
+
+#: woocommerce-paykka-gateway.php:116
+msgid "Payments gateway unavailable"
+msgstr "Payments 网关不可用"
+
+#: includes/blocks/wc-gateway-paykka-card-support.php:96
+msgid "Preparing the secure payment form…"
+msgstr "正在准备安全支付表单…"
+
+#: includes/blocks/wc-gateway-paykka-card-support.php:97
+msgid "Ready"
+msgstr "已就绪"
+
+#: includes/blocks/wc-gateway-paykka-card-support.php:98
+msgid "The PayKKa payment form failed to load. Please refresh and try again."
+msgstr "PayKKa 支付表单加载失败，请刷新后重试。"
+
+#: includes/blocks/wc-gateway-paykka-card-support.php:99
+msgid "Please enter your billing email and country/region first."
+msgstr "请先填写账单邮箱和国家/地区。"
+
+#: includes/blocks/wc-gateway-paykka-card-support.php:100
+msgid "The payment form is not ready yet. Please wait a moment before placing your order."
+msgstr "支付表单尚未就绪，请稍候再下单。"
+
+#: includes/blocks/wc-gateway-paykka-card-support.php:101
+msgid "Processing payment…"
+msgstr "正在处理支付…"
+
+#: includes/blocks/wc-gateway-paykka-card-support.php:102
+msgid "Please enter your complete card details before placing the order, or use Apple Pay / Google Pay."
+msgstr "请填写完整的银行卡信息后再下单，或使用 Apple Pay / Google Pay。"
+
+#: includes/blocks/wc-gateway-paykka-card-support.php:103
+msgid "Please fix the billing and address errors on the checkout page before paying."
+msgstr "请先修正结账页账单/地址等错误后再支付。"

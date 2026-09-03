@@ -11,14 +11,14 @@ use lib\Paykka\Request\PaykkaCallBackHandler;
 class Paykka_Card_Gateway extends WC_Payment_Gateway
 {
     /** @var string */
-    public $version = '1.5.11';
+    public $version = '1.5.12';
 
     public function __construct()
     {
         $this->id                 = 'paykka-card';
         $this->has_fields         = true;
         $this->method_title       = __('Paykka Payments', 'paykka-for-woocommerce');
-        $this->method_description = __('WooCommerce Blocks 结账页内嵌 Payments（银行卡 / Apple Pay / Google Pay）。选中后展示支付组件，点击下单或钱包按钮完成支付。不影响 Paykka Hosted。', 'paykka-for-woocommerce');
+        $this->method_description = __('Embedded Payments (card / Apple Pay / Google Pay) inside the WooCommerce Blocks checkout. Selecting it shows the payment components, and customers pay by placing the order or using a wallet button. Paykka Hosted is unaffected.', 'paykka-for-woocommerce');
         $this->supports           = array('products', 'refunds');
 
         $this->init_form_fields();
@@ -36,22 +36,22 @@ class Paykka_Card_Gateway extends WC_Payment_Gateway
     {
         $this->form_fields = array(
             'enabled' => array(
-                'title'   => __('启用/禁用', 'paykka-for-woocommerce'),
+                'title'   => __('Enable/Disable', 'paykka-for-woocommerce'),
                 'type'    => 'checkbox',
-                'label'   => __('启用 Paykka Payments（Embedded）', 'paykka-for-woocommerce'),
+                'label'   => __('Enable Paykka Payments (embedded)', 'paykka-for-woocommerce'),
                 'default' => 'yes',
             ),
             'title' => array(
-                'title'       => __('标题', 'paykka-for-woocommerce'),
+                'title'       => __('Title', 'paykka-for-woocommerce'),
                 'type'        => 'text',
-                'description' => __('结账页显示的支付方式名称', 'paykka-for-woocommerce'),
+                'description' => __('Name of the payment method shown at checkout', 'paykka-for-woocommerce'),
                 'default'     => __('Payments', 'paykka-for-woocommerce'),
                 'desc_tip'    => true,
             ),
             'enable_saved_cards' => array(
-                'title'   => __('启用保存卡', 'paykka-for-woocommerce'),
+                'title'   => __('Enable saved cards', 'paykka-for-woocommerce'),
                 'type'    => 'checkbox',
-                'label'   => __('允许已登录顾客勾选保存支付信息（需账户侧支持）', 'paykka-for-woocommerce'),
+                'label'   => __('Let logged-in customers choose to save their payment details (requires account-side support)', 'paykka-for-woocommerce'),
                 'default' => 'no',
             ),
         );
@@ -84,7 +84,7 @@ class Paykka_Card_Gateway extends WC_Payment_Gateway
     public function payment_fields()
     {
         // Payments 以内嵌 Blocks 结账为准；经典结账仅显示说明。
-        echo '<p>' . esc_html__('请使用 Blocks 结账页完成 Payments 支付。', 'paykka-for-woocommerce') . '</p>';
+        echo '<p>' . esc_html__('Please use the Blocks checkout page to pay with Payments.', 'paykka-for-woocommerce') . '</p>';
     }
 
     public function payment_scripts()
@@ -95,7 +95,7 @@ class Paykka_Card_Gateway extends WC_Payment_Gateway
     public function ajax_create_session()
     {
         if (!check_ajax_referer('paykka_card_checkout', 'security', false)) {
-            wp_send_json_error(array('message' => __('安全校验失败，请刷新结账页后重试。', 'paykka-for-woocommerce')), 403);
+            wp_send_json_error(array('message' => __('Security check failed. Please refresh the checkout page and try again.', 'paykka-for-woocommerce')), 403);
         }
 
         $posted_data = array();
@@ -127,7 +127,7 @@ class Paykka_Card_Gateway extends WC_Payment_Gateway
     public function ajax_place_order_note()
     {
         if (!check_ajax_referer('paykka_card_checkout', 'security', false)) {
-            wp_send_json_error(array('message' => __('安全校验失败，请刷新结账页后重试。', 'paykka-for-woocommerce')), 403);
+            wp_send_json_error(array('message' => __('Security check failed. Please refresh the checkout page and try again.', 'paykka-for-woocommerce')), 403);
         }
         if (!function_exists('WC') || !WC()->session) {
             wp_send_json_error(array('message' => __('Session unavailable', 'paykka-for-woocommerce')), 400);
@@ -155,12 +155,12 @@ class Paykka_Card_Gateway extends WC_Payment_Gateway
     public function create_checkout_card_session($posted_data = '')
     {
         if (!function_exists('WC') || !WC()->cart || WC()->cart->is_empty() || !WC()->session) {
-            return new \WP_Error('paykka_empty_cart', __('购物车为空或结账会话已过期。', 'paykka-for-woocommerce'));
+            return new \WP_Error('paykka_empty_cart', __('Your cart is empty or the checkout session has expired.', 'paykka-for-woocommerce'));
         }
 
         $data = $this->clean_checkout_data($posted_data);
         if (!empty($data['payment_method']) && $data['payment_method'] !== $this->id) {
-            return new \WP_Error('paykka_wrong_method', __('请选择 Payments 后再继续。', 'paykka-for-woocommerce'));
+            return new \WP_Error('paykka_wrong_method', __('Please select Payments before continuing.', 'paykka-for-woocommerce'));
         }
 
         $billing_error = $this->validate_billing_for_session($data);
@@ -220,7 +220,7 @@ class Paykka_Card_Gateway extends WC_Payment_Gateway
         require_once PAYKKA_PLUGIN_PATH . 'classes/lib/Paykka/Request/PaykkaRequestHandler.php';
         $response = (new PaykkaRequestHandler())->buildDropInSession($order);
         if (!is_array($response) || empty($response['data']['session_id']) || (isset($response['ret_code']) && $response['ret_code'] !== '000000')) {
-            $message = is_array($response) && !empty($response['ret_msg']) ? (string) $response['ret_msg'] : __('PayKKa 支付会话创建失败，请稍后重试。', 'paykka-for-woocommerce');
+            $message = is_array($response) && !empty($response['ret_msg']) ? (string) $response['ret_msg'] : __('Could not create the PayKKa payment session. Please try again later.', 'paykka-for-woocommerce');
             return new \WP_Error('paykka_session_failed', wp_strip_all_tags($message));
         }
 
@@ -251,7 +251,7 @@ class Paykka_Card_Gateway extends WC_Payment_Gateway
             || $order->has_status(array('processing', 'completed'));
         if (!$paid) {
             wc_add_notice(
-                __('请填写完整的银行卡信息并完成支付后再下单。', 'paykka-for-woocommerce'),
+                __('Please enter complete card details and finish the payment before placing the order.', 'paykka-for-woocommerce'),
                 'error'
             );
             return array('result' => 'failure');
@@ -313,21 +313,21 @@ class Paykka_Card_Gateway extends WC_Payment_Gateway
         $phone    = isset($data['billing_phone']) ? trim((string) $data['billing_phone']) : '';
 
         if ($email === '' || !is_email($email)) {
-            return new \WP_Error('paykka_billing_email', __('请填写有效的账单邮箱。', 'paykka-for-woocommerce'));
+            return new \WP_Error('paykka_billing_email', __('Please enter a valid billing email address.', 'paykka-for-woocommerce'));
         }
         if ($country === '') {
-            return new \WP_Error('paykka_billing_country', __('请选择账单国家/地区。', 'paykka-for-woocommerce'));
+            return new \WP_Error('paykka_billing_country', __('Please select a billing country/region.', 'paykka-for-woocommerce'));
         }
         if ($postcode !== '' && class_exists('WC_Validation') && !\WC_Validation::is_postcode($postcode, $country)) {
             return new \WP_Error(
                 'paykka_billing_postcode',
-                __('账单邮编 / ZIP 格式不正确，请按国家/地区要求修改后再支付。', 'paykka-for-woocommerce')
+                __('The billing postcode / ZIP is invalid. Please correct it for the selected country/region before paying.', 'paykka-for-woocommerce')
             );
         }
         if ($phone !== '' && class_exists('WC_Validation') && !\WC_Validation::is_phone($phone)) {
             return new \WP_Error(
                 'paykka_billing_phone',
-                __('账单电话号码格式不正确。', 'paykka-for-woocommerce')
+                __('The billing phone number is invalid.', 'paykka-for-woocommerce')
             );
         }
         return true;

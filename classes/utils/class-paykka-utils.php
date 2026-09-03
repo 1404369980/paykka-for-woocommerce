@@ -201,6 +201,26 @@ function getPaykkaSettings()
 }
 
 /**
+ * 读取 Hosted 前台文案。
+ * 历史版本把中文默认值写进了选项表，迁移为「视作未设置」，以便按站点语言取默认值。
+ *
+ * @param string $option
+ * @param string $default 已本地化的默认值
+ * @return string
+ */
+function paykka_get_hosted_text($option, $default)
+{
+    $value  = trim((string) get_option($option, ''));
+    $legacy = array(
+        '使用 Paykka Hosted 收银台安全支付',
+    );
+    if ($value === '' || in_array($value, $legacy, true)) {
+        return $default;
+    }
+    return $value;
+}
+
+/**
  * 生成一次性 Create Session 用的商户流水号（≤64）。
  * 格式：{orderId}c{YmdHis}{rand3}；订单关联靠 meta，不靠反解析。
  *

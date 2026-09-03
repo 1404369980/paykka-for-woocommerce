@@ -14,7 +14,9 @@ final class WC_Gateway_Paykka_Support extends AbstractPaymentMethodType
         $this->settings = array(
             'enabled'     => get_option('paykka_enabled', 'yes'),
             'title'       => get_option('paykka_title', __('Paykka Hosted', 'paykka-for-woocommerce')),
-            'description' => get_option('paykka_description', __('使用 Paykka Hosted 收银台安全支付', 'paykka-for-woocommerce')),
+            'description' => function_exists('paykka_get_hosted_text')
+                ? paykka_get_hosted_text('paykka_description', __('Pay securely with the Paykka Hosted checkout', 'paykka-for-woocommerce'))
+                : get_option('paykka_description', __('Pay securely with the Paykka Hosted checkout', 'paykka-for-woocommerce')),
         );
     }
 
@@ -29,7 +31,7 @@ final class WC_Gateway_Paykka_Support extends AbstractPaymentMethodType
             'wc-paykka-gateway-blocks',
             PAYKKA_PLUGIN_URL . 'assets/js/blocks.js',
             array('wc-blocks-registry', 'wc-settings', 'wp-element', 'wp-i18n'),
-            '1.5.11',
+            '1.5.12',
             true
         );
         if (function_exists('wp_set_script_translations')) {

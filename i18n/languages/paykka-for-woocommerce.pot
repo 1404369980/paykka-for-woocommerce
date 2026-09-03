@@ -1,0 +1,395 @@
+# SOME DESCRIPTIVE TITLE.
+# This file is put in the public domain.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PayKKa for WooCommerce\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-09-03 17:33+0800\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: classes/admin/class-paykka-order-list.php:38
+#: classes/admin/class-paykka-order-list.php:42
+#: classes/admin/class-paykka-order-list.php:104
+msgid "PayKKa Order ID"
+msgstr ""
+
+#: classes/utils/class-paykka-utils.php:303
+#, php-format
+msgid "PayKKa place order (%s)"
+msgstr ""
+
+#: classes/lib/Paykka/Request/PaykkaRequestHandler.php:380
+msgid "Payment signature error"
+msgstr ""
+
+#: classes/lib/Paykka/Request/PaykkaRequestHandler.php:951
+msgid "PayKKa: The local WooCommerce refund record was automatically removed."
+msgstr ""
+
+#: classes/lib/Paykka/Request/PaykkaCallBackHandler.php:80
+msgid ""
+"The payment was not successful. Please try again or choose another payment "
+"method."
+msgstr ""
+
+#: classes/lib/Paykka/Request/PaykkaCallBackHandler.php:82
+msgid "We have not received your payment yet. Please start the payment again."
+msgstr ""
+
+#: classes/lib/Paykka/Request/PaykkaCallBackHandler.php:84
+msgid ""
+"Your payment is still being confirmed. Please refresh in a moment or contact "
+"support."
+msgstr ""
+
+#: classes/lib/Paykka/Request/PaykkaCallBackHandler.php:102
+msgid ""
+"We cannot confirm the payment result right now. Please try again later or "
+"contact support."
+msgstr ""
+
+#: classes/wc-paykka-card-gateway.php:20
+msgid "Paykka Payments"
+msgstr ""
+
+#: classes/wc-paykka-card-gateway.php:21
+msgid ""
+"Embedded Payments (card / Apple Pay / Google Pay) inside the WooCommerce "
+"Blocks checkout. Selecting it shows the payment components, and customers "
+"pay by placing the order or using a wallet button. Paykka Hosted is "
+"unaffected."
+msgstr ""
+
+#: classes/wc-paykka-card-gateway.php:28 classes/wc-paykka-card-gateway.php:48
+#: classes/wc-paykka-card-gateway.php:79
+#: includes/blocks/wc-gateway-paykka-card-support.php:80
+msgid "Payments"
+msgstr ""
+
+#: classes/wc-paykka-card-gateway.php:39
+#: classes/wc-paykka-credit-card-gateway.php:315
+msgid "Enable/Disable"
+msgstr ""
+
+#: classes/wc-paykka-card-gateway.php:41
+msgid "Enable Paykka Payments (embedded)"
+msgstr ""
+
+#: classes/wc-paykka-card-gateway.php:45
+#: classes/wc-paykka-credit-card-gateway.php:322
+msgid "Title"
+msgstr ""
+
+#: classes/wc-paykka-card-gateway.php:47
+msgid "Name of the payment method shown at checkout"
+msgstr ""
+
+#: classes/wc-paykka-card-gateway.php:52
+msgid "Enable saved cards"
+msgstr ""
+
+#: classes/wc-paykka-card-gateway.php:54
+msgid ""
+"Let logged-in customers choose to save their payment details (requires "
+"account-side support)"
+msgstr ""
+
+#: classes/wc-paykka-card-gateway.php:87
+msgid "Please use the Blocks checkout page to pay with Payments."
+msgstr ""
+
+#: classes/wc-paykka-card-gateway.php:98 classes/wc-paykka-card-gateway.php:130
+msgid "Security check failed. Please refresh the checkout page and try again."
+msgstr ""
+
+#: classes/wc-paykka-card-gateway.php:133
+msgid "Session unavailable"
+msgstr ""
+
+#: classes/wc-paykka-card-gateway.php:141
+msgid "Order not found"
+msgstr ""
+
+#: classes/wc-paykka-card-gateway.php:158
+msgid "Your cart is empty or the checkout session has expired."
+msgstr ""
+
+#: classes/wc-paykka-card-gateway.php:163
+msgid "Please select Payments before continuing."
+msgstr ""
+
+#: classes/wc-paykka-card-gateway.php:214
+#: classes/wc-paykka-credit-card-gateway.php:379
+msgid "Unable to start a new PayKKa payment for this order."
+msgstr ""
+
+#: classes/wc-paykka-card-gateway.php:223
+msgid "Could not create the PayKKa payment session. Please try again later."
+msgstr ""
+
+#: classes/wc-paykka-card-gateway.php:245
+#: classes/wc-paykka-credit-card-gateway.php:370
+#: classes/wc-paykka-credit-card-gateway.php:441
+msgid "Invalid order"
+msgstr ""
+
+#: classes/wc-paykka-card-gateway.php:254
+msgid ""
+"Please enter complete card details and finish the payment before placing the "
+"order."
+msgstr ""
+
+#: classes/wc-paykka-card-gateway.php:271
+msgid "Paykka gateway unavailable"
+msgstr ""
+
+#: classes/wc-paykka-card-gateway.php:316
+msgid "Please enter a valid billing email address."
+msgstr ""
+
+#: classes/wc-paykka-card-gateway.php:319
+msgid "Please select a billing country/region."
+msgstr ""
+
+#: classes/wc-paykka-card-gateway.php:324
+msgid ""
+"The billing postcode / ZIP is invalid. Please correct it for the selected "
+"country/region before paying."
+msgstr ""
+
+#: classes/wc-paykka-card-gateway.php:330
+msgid "The billing phone number is invalid."
+msgstr ""
+
+#: classes/wc-paykka-credit-card-gateway.php:33
+msgid ""
+"Shows “Paykka Hosted” at checkout. Customers are redirected to the Paykka "
+"Hosted checkout to complete the payment."
+msgstr ""
+
+#: classes/wc-paykka-credit-card-gateway.php:34
+#: classes/wc-paykka-credit-card-gateway.php:36
+#: classes/wc-paykka-credit-card-gateway.php:51
+#: classes/wc-paykka-credit-card-gateway.php:325
+#: includes/blocks/wc-gateway-paykka-support.php:16
+msgid "Paykka Hosted"
+msgstr ""
+
+#: classes/wc-paykka-credit-card-gateway.php:37
+#: classes/wc-paykka-credit-card-gateway.php:52
+#: classes/wc-paykka-credit-card-gateway.php:333
+#: includes/blocks/wc-gateway-paykka-support.php:17
+msgid "Pay securely with the Paykka Hosted checkout"
+msgstr ""
+
+#: classes/wc-paykka-credit-card-gateway.php:155
+#: classes/wc-paykka-credit-card-gateway.php:194
+#: classes/wc-paykka-credit-card-gateway.php:310
+msgid "Connection settings"
+msgstr ""
+
+#: classes/wc-paykka-credit-card-gateway.php:156
+msgid "Standard payments"
+msgstr ""
+
+#: classes/wc-paykka-credit-card-gateway.php:157
+#: classes/wc-paykka-credit-card-gateway.php:269
+msgid "Advanced settings"
+msgstr ""
+
+#: classes/wc-paykka-credit-card-gateway.php:203
+msgid ""
+"Unchecked means production, checked means test. The environment can also be "
+"set in paykka-config.php (env) or with the PAYKKA_ENV constant in wp-config, "
+"both of which take precedence over this checkbox."
+msgstr ""
+
+#: classes/wc-paykka-credit-card-gateway.php:220
+msgid ""
+"Optional. Falls back to the Sandbox Merchant Id. Used in the v3 API request "
+"headers."
+msgstr ""
+
+#: classes/wc-paykka-credit-card-gateway.php:242
+msgid ""
+"Optional. Falls back to the Merchant Id. Used in the v3 API request headers."
+msgstr ""
+
+#: classes/wc-paykka-credit-card-gateway.php:250
+msgid "API region"
+msgstr ""
+
+#: classes/wc-paykka-credit-card-gateway.php:255
+msgid "Europe (https://openapi.eu.paykka.com)"
+msgstr ""
+
+#: classes/wc-paykka-credit-card-gateway.php:256
+msgid "Hong Kong (https://openapi.aq.paykka.com)"
+msgstr ""
+
+#: classes/wc-paykka-credit-card-gateway.php:259
+msgid ""
+"Region used for backend API calls in production. Europe and Hong Kong use "
+"different domains, so this must match the region of your Paykka account."
+msgstr ""
+
+#: classes/wc-paykka-credit-card-gateway.php:274
+msgid "Enable debug mode"
+msgstr ""
+
+#: classes/wc-paykka-credit-card-gateway.php:279
+msgid ""
+"Recommended while developing. Writes detailed entries to error_log (order "
+"placement, webhooks, signatures) to help troubleshooting. Turn it off in "
+"production."
+msgstr ""
+
+#: classes/wc-paykka-credit-card-gateway.php:282
+msgid "Log request results"
+msgstr ""
+
+#: classes/wc-paykka-credit-card-gateway.php:287
+msgid ""
+"When enabled, the URL, HTTP status code and response body of every Paykka "
+"API request are written to the PHP error_log. Make sure error_log output is "
+"configured on the server or in wp-config."
+msgstr ""
+
+#: classes/wc-paykka-credit-card-gateway.php:290
+msgid "Authorise only"
+msgstr ""
+
+#: classes/wc-paykka-credit-card-gateway.php:295
+msgid "PayKKa platform public key (webhook signature)"
+msgstr ""
+
+#: classes/wc-paykka-credit-card-gateway.php:299
+msgid ""
+"When set, x-paykka-sign (SHA256_WITH_RSA) is enforced on /wp-json/paykka/v1/"
+"webhook. Leave it empty to skip verification (sandbox debugging only). The "
+"public key is available in the PayKKa developer documentation."
+msgstr ""
+
+#: classes/wc-paykka-credit-card-gateway.php:319
+msgid "Enable Paykka payments"
+msgstr ""
+
+#: classes/wc-paykka-credit-card-gateway.php:327
+msgid "Name of the Hosted payment method shown at checkout"
+msgstr ""
+
+#: classes/wc-paykka-credit-card-gateway.php:330
+msgid "Description"
+msgstr ""
+
+#: classes/wc-paykka-credit-card-gateway.php:380
+msgid "Unable to start payment"
+msgstr ""
+
+#: classes/wc-paykka-credit-card-gateway.php:397
+msgid ""
+"Payment request failed. Please try again or choose another payment method."
+msgstr ""
+
+#: classes/wc-paykka-credit-card-gateway.php:398
+msgid "Payment request failed"
+msgstr ""
+
+#: classes/wc-paykka-credit-card-gateway.php:407
+msgid ""
+"Payment session created but redirect URL is missing. Please contact support."
+msgstr ""
+
+#: classes/wc-paykka-credit-card-gateway.php:408
+msgid "Missing redirect URL"
+msgstr ""
+
+#: classes/wc-paykka-credit-card-gateway.php:423
+msgid "Payment session failed"
+msgstr ""
+
+#: classes/wc-paykka-credit-card-gateway.php:444
+#: classes/wc-paykka-credit-card-gateway.php:478
+msgid "Invalid refund amount"
+msgstr ""
+
+#: classes/wc-paykka-credit-card-gateway.php:453
+msgid "Payment query failed"
+msgstr ""
+
+#: classes/wc-paykka-credit-card-gateway.php:462
+msgid ""
+"No PayKKa gateway transaction has been found for this order yet, so it "
+"cannot be refunded."
+msgstr ""
+
+#: classes/wc-paykka-credit-card-gateway.php:468
+#, php-format
+msgid "Order status %s is not refundable"
+msgstr ""
+
+#: classes/wc-paykka-credit-card-gateway.php:481
+msgid "Refund amount exceeds available refundable amount"
+msgstr ""
+
+#: classes/wc-paykka-credit-card-gateway.php:490
+msgid "Refund request failed"
+msgstr ""
+
+#: woocommerce-paykka-gateway.php:97 woocommerce-paykka-gateway.php:112
+msgid "WooCommerce unavailable"
+msgstr ""
+
+#: woocommerce-paykka-gateway.php:101
+msgid "Credit Card gateway unavailable"
+msgstr ""
+
+#: woocommerce-paykka-gateway.php:116
+msgid "Payments gateway unavailable"
+msgstr ""
+
+#: includes/blocks/wc-gateway-paykka-card-support.php:96
+msgid "Preparing the secure payment form…"
+msgstr ""
+
+#: includes/blocks/wc-gateway-paykka-card-support.php:97
+msgid "Ready"
+msgstr ""
+
+#: includes/blocks/wc-gateway-paykka-card-support.php:98
+msgid "The PayKKa payment form failed to load. Please refresh and try again."
+msgstr ""
+
+#: includes/blocks/wc-gateway-paykka-card-support.php:99
+msgid "Please enter your billing email and country/region first."
+msgstr ""
+
+#: includes/blocks/wc-gateway-paykka-card-support.php:100
+msgid ""
+"The payment form is not ready yet. Please wait a moment before placing your "
+"order."
+msgstr ""
+
+#: includes/blocks/wc-gateway-paykka-card-support.php:101
+msgid "Processing payment…"
+msgstr ""
+
+#: includes/blocks/wc-gateway-paykka-card-support.php:102
+msgid ""
+"Please enter your complete card details before placing the order, or use "
+"Apple Pay / Google Pay."
+msgstr ""
+
+#: includes/blocks/wc-gateway-paykka-card-support.php:103
+msgid ""
+"Please fix the billing and address errors on the checkout page before paying."
+msgstr ""

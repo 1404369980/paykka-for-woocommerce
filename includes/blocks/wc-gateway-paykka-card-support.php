@@ -26,7 +26,7 @@ final class WC_Gateway_Paykka_Card_Support extends AbstractPaymentMethodType
 
     public function get_payment_method_script_handles()
     {
-        $version = '1.5.11';
+        $version = '1.5.12';
         $checkout_url = function_exists('paykka_get_checkout_base_url') ? paykka_get_checkout_base_url() : '';
         $script_url   = rtrim($checkout_url, '/') . '/cp/card-checkout-ui.js';
         $style_url    = rtrim($checkout_url, '/') . '/cp/style.css';
@@ -93,14 +93,14 @@ final class WC_Gateway_Paykka_Card_Support extends AbstractPaymentMethodType
             'sdkUrl'      => rtrim($checkout_url, '/') . '/cp/card-checkout-ui.js',
             'checkoutBase'=> $checkout_url,
             'i18n'        => array(
-                'loading'     => __('正在准备安全支付表单…', 'paykka-for-woocommerce'),
+                'loading'     => __('Preparing the secure payment form…', 'paykka-for-woocommerce'),
                 'ready'       => __('Ready', 'paykka-for-woocommerce'),
-                'error'       => __('PayKKa 支付表单加载失败，请刷新后重试。', 'paykka-for-woocommerce'),
-                'needBilling' => __('请先填写账单邮箱和国家/地区。', 'paykka-for-woocommerce'),
-                'notReady'    => __('支付表单尚未就绪，请稍候再下单。', 'paykka-for-woocommerce'),
-                'paying'      => __('正在处理支付…', 'paykka-for-woocommerce'),
-                'needCard'    => __('请填写完整的银行卡信息后再下单，或使用 Apple Pay / Google Pay。', 'paykka-for-woocommerce'),
-                'fixInvalid' => __('请先修正结账页账单/地址等错误后再支付。', 'paykka-for-woocommerce'),
+                'error'       => __('The PayKKa payment form failed to load. Please refresh and try again.', 'paykka-for-woocommerce'),
+                'needBilling' => __('Please enter your billing email and country/region first.', 'paykka-for-woocommerce'),
+                'notReady'    => __('The payment form is not ready yet. Please wait a moment before placing your order.', 'paykka-for-woocommerce'),
+                'paying'      => __('Processing payment…', 'paykka-for-woocommerce'),
+                'needCard'    => __('Please enter your complete card details before placing the order, or use Apple Pay / Google Pay.', 'paykka-for-woocommerce'),
+                'fixInvalid' => __('Please fix the billing and address errors on the checkout page before paying.', 'paykka-for-woocommerce'),
             ),
         );
     }
