@@ -26,7 +26,7 @@ final class WC_Gateway_Paykka_Card_Support extends AbstractPaymentMethodType
 
     public function get_payment_method_script_handles()
     {
-        $version = '1.5.10';
+        $version = '1.5.11';
         $checkout_url = function_exists('paykka_get_checkout_base_url') ? paykka_get_checkout_base_url() : '';
         $script_url   = rtrim($checkout_url, '/') . '/cp/card-checkout-ui.js';
         $style_url    = rtrim($checkout_url, '/') . '/cp/style.css';
@@ -49,11 +49,20 @@ final class WC_Gateway_Paykka_Card_Support extends AbstractPaymentMethodType
 
         wp_register_script(
             'wc-paykka-card-gateway-blocks',
-            plugin_url_paykka() . '/assets/js/blocks-card.js',
-            array('wc-blocks-registry', 'wc-settings', 'wp-element', 'wp-i18n', 'wp-html-entities', 'paykka-card-sdk'),
+            PAYKKA_PLUGIN_URL . 'assets/js/blocks-card.js',
+            // wp-data：脚本读取 wc/store/validation 拦截无效结账字段，必须显式依赖
+            array('wc-blocks-registry', 'wc-settings', 'wp-element', 'wp-i18n', 'wp-html-entities', 'wp-data', 'paykka-card-sdk'),
             $version,
             true
         );
+
+        if (function_exists('wp_set_script_translations')) {
+            wp_set_script_translations(
+                'wc-paykka-card-gateway-blocks',
+                'paykka-for-woocommerce',
+                PAYKKA_PLUGIN_PATH . 'i18n/languages'
+            );
+        }
 
         return array('wc-paykka-card-gateway-blocks');
     }

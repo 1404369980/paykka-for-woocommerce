@@ -2,12 +2,22 @@
     margin: 0.75em 0 0;
 }
 
+/* 钱包容器只有在 JS 把宿主节点搬进来后才显示 */
 .paykka-wallet-container {
+    display: none;
     margin: 0 0 0.65em;
 }
 
-.paykka-wallet-container:empty {
+.paykka-wallet-container.paykka-has-content {
+    display: block;
+}
+
+.paykka-wallet-container.paykka-has-content:empty {
     display: none;
+}
+
+.paykka-host {
+    display: block;
 }
 
 .paykka-card-container {

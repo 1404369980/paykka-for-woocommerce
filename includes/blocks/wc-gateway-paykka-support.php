@@ -25,14 +25,20 @@ final class WC_Gateway_Paykka_Support extends AbstractPaymentMethodType
 
     public function get_payment_method_script_handles()
     {
-        $script_url = plugin_url_paykka() . '/assets/js/blocks.js';
         wp_register_script(
             'wc-paykka-gateway-blocks',
-            $script_url,
+            PAYKKA_PLUGIN_URL . 'assets/js/blocks.js',
             array('wc-blocks-registry', 'wc-settings', 'wp-element', 'wp-i18n'),
-            '1.4.1',
+            '1.5.11',
             true
         );
+        if (function_exists('wp_set_script_translations')) {
+            wp_set_script_translations(
+                'wc-paykka-gateway-blocks',
+                'paykka-for-woocommerce',
+                PAYKKA_PLUGIN_PATH . 'i18n/languages'
+            );
+        }
         return array('wc-paykka-gateway-blocks');
     }
 

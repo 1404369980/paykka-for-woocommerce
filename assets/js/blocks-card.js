@@ -16,9 +16,14 @@
     const i18n = settings.i18n || {};
     const labelText = decodeEntities(settings.title || '') || __('Payments', 'paykka-for-woocommerce');
 
+    const HOST_KEYS = ['apple', 'google', 'card'];
+
     /**
      * 跨支付方式切换时 Blocks 会卸载 Content；用模块级缓存保留已 init 的组件，
-     * 切回 Payments 时只 remount，不重新 create session。
+     * 切回 Payments 时只把宿主节点搬回来，不重新 create session。
+     *
+     * hosts 是插件自己创建的 div：SDK 只往 host 里挂载一次，React 从不认识 host，
+     * 因此 React 协调（卸载/重排）与 SDK 的 DOM 操作不会互相 removeChild。
      */
     const cardCache = {
         signature: '',
@@ -29,12 +34,14 @@
         googlePay: null,
         readyMethods: [],
         parking: null,
+        hosts: { apple: null, google: null, card: null },
+        parkTimer: 0,
         payResolver: null,
-        skipSubmitNote: false,
+        lastNoteAt: 0,
     };
 
     function ensureParking() {
-        if (cardCache.parking && document.body.contains(cardCache.parking)) {
+        if (cardCache.parking && cardCache.parking.parentNode) {
             return cardCache.parking;
         }
         const el = document.createElement('div');
@@ -44,64 +51,103 @@
             'position:absolute;left:-9999px;top:0;width:1px;height:1px;overflow:hidden;opacity:0;pointer-events:none;';
         document.body.appendChild(el);
         cardCache.parking = el;
+        HOST_KEYS.forEach(function (key) {
+            const host = cardCache.hosts[key];
+            if (host && !host.parentNode) {
+                el.appendChild(host);
+            }
+        });
         return el;
     }
 
-    function mountComponent(instance, container) {
-        if (!instance || typeof instance.mount !== 'function' || !container) {
+    function ensureHost(key) {
+        if (cardCache.hosts[key]) {
+            return cardCache.hosts[key];
+        }
+        const host = document.createElement('div');
+        host.className = 'paykka-host paykka-host--' + key;
+        cardCache.hosts[key] = host;
+        ensureParking().appendChild(host);
+        return host;
+    }
+
+    /** 钱包容器默认隐藏，只有真正接到 host 时才占位（避免 Windows / Linux 上的空白块）。 */
+    function markWalletVisibility(el, visible) {
+        if (!el || !el.classList || !el.classList.contains('paykka-wallet-container')) {
+            return;
+        }
+        el.classList.toggle('paykka-has-content', !!visible);
+    }
+
+    /**
+     * 只搬动 host（appendChild 即移动），不调用 SDK 的 unmount/mount，
+     * 避免 SDK 对已被 React 摘除的容器执行 removeChild。
+     */
+    function moveHost(key, container) {
+        const host = cardCache.hosts[key];
+        if (!host || !container) {
             return false;
         }
-        try {
-            if (typeof instance.unmount === 'function') {
-                instance.unmount();
-            }
-        } catch (e) {
-            // ignore
-        }
-        try {
-            instance.mount(container);
+        if (host.parentNode === container) {
+            markWalletVisibility(container, true);
             return true;
+        }
+        const previous = host.parentNode;
+        try {
+            container.appendChild(host);
         } catch (e) {
             return false;
+        }
+        markWalletVisibility(previous, false);
+        markWalletVisibility(container, true);
+        return true;
+    }
+
+    function cancelPark() {
+        if (cardCache.parkTimer) {
+            clearTimeout(cardCache.parkTimer);
+            cardCache.parkTimer = 0;
         }
     }
 
     function parkAll() {
         const parking = ensureParking();
-        [cardCache.applePay, cardCache.googlePay, cardCache.card].forEach(function (inst) {
-            if (!inst) {
-                return;
-            }
-            try {
-                if (typeof inst.unmount === 'function') {
-                    inst.unmount();
-                }
-            } catch (e) {
-                // ignore
-            }
-            try {
-                inst.mount(parking);
-            } catch (e) {
-                // ignore
-            }
+        HOST_KEYS.forEach(function (key) {
+            moveHost(key, parking);
         });
     }
 
+    /**
+     * React 卸载的 cleanup 处于 commit 阶段，此时同步搬 DOM 容易与协调冲突，
+     * 推到下一个宏任务执行。
+     */
+    function schedulePark() {
+        if (cardCache.parkTimer) {
+            return;
+        }
+        cardCache.parkTimer = setTimeout(function () {
+            cardCache.parkTimer = 0;
+            parkAll();
+        }, 0);
+    }
+
     function attachAll(appleEl, googleEl, cardEl) {
+        cancelPark();
         let ok = false;
-        if (cardCache.applePay && appleEl && mountComponent(cardCache.applePay, appleEl)) {
+        if (cardCache.applePay && moveHost('apple', appleEl)) {
             ok = true;
         }
-        if (cardCache.googlePay && googleEl && mountComponent(cardCache.googlePay, googleEl)) {
+        if (cardCache.googlePay && moveHost('google', googleEl)) {
             ok = true;
         }
-        if (cardCache.card && cardEl && mountComponent(cardCache.card, cardEl)) {
+        if (cardCache.card && moveHost('card', cardEl)) {
             ok = true;
         }
         return ok;
     }
 
     function destroyCachedCard() {
+        cancelPark();
         [cardCache.applePay, cardCache.googlePay, cardCache.card].forEach(function (inst) {
             try {
                 if (inst && typeof inst.unmount === 'function') {
@@ -126,9 +172,30 @@
         cardCache.googlePay = null;
         cardCache.readyMethods = [];
         cardCache.payResolver = null;
-        cardCache.skipSubmitNote = false;
-        if (cardCache.parking && cardCache.parking.parentNode) {
-            cardCache.parking.innerHTML = '';
+        // 逐个摘除 host，绝不用 innerHTML 清空：SDK 仍持有其中节点的引用
+        HOST_KEYS.forEach(function (key) {
+            const host = cardCache.hosts[key];
+            if (host && host.parentNode) {
+                try {
+                    host.parentNode.removeChild(host);
+                } catch (e) {
+                    // ignore
+                }
+            }
+            cardCache.hosts[key] = null;
+        });
+    }
+
+    /** Apple Pay 只在 Safari/macOS/iOS 且设备可用时才创建，Windows / Linux 上不留空容器。 */
+    function isApplePayAvailable() {
+        try {
+            return !!(
+                window.ApplePaySession &&
+                typeof window.ApplePaySession.canMakePayments === 'function' &&
+                window.ApplePaySession.canMakePayments()
+            );
+        } catch (e) {
+            return false;
         }
     }
 
@@ -155,11 +222,20 @@
         return codes.indexOf(target) !== -1;
     }
 
+    /**
+     * 每次发起支付写一条订单备注。卡支付走 WC「下单」，钱包按钮走 SDK onSubmit，
+     * 两条路径可能在同一次点击里先后触发，用时间窗去重。
+     */
     function notePlaceOrder() {
         const url = settings.noteAjaxUrl;
         if (!url) {
             return Promise.resolve(false);
         }
+        const now = Date.now();
+        if (cardCache.lastNoteAt && now - cardCache.lastNoteAt < 3000) {
+            return Promise.resolve(false);
+        }
+        cardCache.lastNoteAt = now;
         const body = new URLSearchParams();
         body.set('security', settings.nonce || '');
         return fetch(url, {
@@ -462,12 +538,7 @@
                         }
                         return;
                     }
-                    // WC「下单」触发的 payment() 已写过备注，避免重复
-                    if (cardCache.skipSubmitNote) {
-                        cardCache.skipSubmitNote = false;
-                        return;
-                    }
-                    // Apple Pay / Google Pay 按钮提交
+                    // Apple Pay / Google Pay 按钮提交；WC「下单」路径已写过的会被时间窗去重
                     notePlaceOrder();
                 },
                 onSuccess: function (payload) {
@@ -523,12 +594,11 @@
             const codes = cardCache.readyMethods.length
                 ? cardCache.readyMethods
                 : ['APPLE_PAY', 'GOOGLE_PAY', 'VISA', 'MASTER_CARD', 'BANKCARD'];
-            const parking = ensureParking();
 
-            if (sdk.ApplePay && hasPaymentMethod(codes, 'APPLE_PAY')) {
+            if (sdk.ApplePay && hasPaymentMethod(codes, 'APPLE_PAY') && isApplePayAvailable()) {
                 try {
                     const apple = checkout.create(sdk.ApplePay, { hidePaymentButton: false });
-                    apple.mount(appleRef.current || parking);
+                    apple.mount(ensureHost('apple'));
                     cardCache.applePay = apple;
                 } catch (e) {
                     // 环境不支持时忽略
@@ -538,7 +608,7 @@
             if (sdk.GooglePay && hasPaymentMethod(codes, 'GOOGLE_PAY')) {
                 try {
                     const google = checkout.create(sdk.GooglePay, { hidePaymentButton: false });
-                    google.mount(googleRef.current || parking);
+                    google.mount(ensureHost('google'));
                     cardCache.googlePay = google;
                 } catch (e) {
                     // 环境不支持时忽略
@@ -563,7 +633,7 @@
             };
 
             const card = checkout.create(sdk.Card, cardOpts);
-            card.mount(mountRef.current || parking);
+            card.mount(ensureHost('card'));
 
             cardCache.checkout = checkout;
             cardCache.card = card;
@@ -687,7 +757,7 @@
         useEffect(
             function () {
                 if (activePaymentMethod !== gatewayId) {
-                    parkAll();
+                    schedulePark();
                     return undefined;
                 }
 
@@ -707,7 +777,7 @@
 
         useEffect(function () {
             return function () {
-                parkAll();
+                schedulePark();
             };
         }, []);
 
@@ -751,7 +821,6 @@
 
                     setStatus(i18n.paying || 'Paying…');
                     setError('');
-                    cardCache.skipSubmitNote = true;
 
                     return new Promise(function (resolve) {
                         let settled = false;
@@ -763,7 +832,6 @@
                             cardCache.payResolver = null;
                             clearTimeout(timer);
                             if (!result || result.ok === false) {
-                                cardCache.skipSubmitNote = false;
                                 setStatus(i18n.ready || 'Ready');
                                 resolve({
                                     type: emitResponse.responseTypes.ERROR,
@@ -786,7 +854,7 @@
                             });
                         }, 60000);
 
-                        notePlaceOrder().finally(function () {
+                        const startPayment = function () {
                             try {
                                 const maybe = cardCache.card.ref.payment();
                                 if (maybe && typeof maybe.then === 'function') {
@@ -804,7 +872,9 @@
                                     message: (err && err.message) || i18n.needCard || i18n.error,
                                 });
                             }
-                        });
+                        };
+                        // Promise.prototype.finally 在旧 Safari 上缺失，用双分支代替
+                        notePlaceOrder().then(startPayment, startPayment);
                     });
                 });
                 return unsubscribe;

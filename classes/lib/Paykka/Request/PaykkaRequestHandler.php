@@ -280,7 +280,7 @@ class PaykkaRequestHandler
     // 业务方法：Hosted Session / 交易查询 / 退款 / 退款查询
     // ========================================================================
 
-    public function buildSessionUrl($order): mixed
+    public function buildSessionUrl($order)
     {
         return $this->handlerSession($order, 'HOSTED');
     }
@@ -290,7 +290,7 @@ class PaykkaRequestHandler
      * 接口: POST /v3/payment/acq/session
      * Card 组件推荐 session_mode=COMPONENT；Drop-in 使用 DROP_IN。见 PayKKa Component Web 文档。
      */
-    public function buildDropInSession($order): mixed
+    public function buildDropInSession($order)
     {
         return $this->handlerSession($order, 'COMPONENT');
     }

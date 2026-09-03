@@ -231,8 +231,8 @@ function paykka_begin_payment_attempt($order, $channel = 'hosted')
         return '';
     }
 
-    $gw = trim((string) $order->get_meta('_paykka_order_id', true));
-    if ($gw !== '' && $order->is_paid()) {
+    // 已收款的订单不再开新 Attempt（网关订单号可能因回调延迟尚未写入，故不作为前置条件）
+    if ($order->is_paid() || $order->has_status(array('processing', 'completed', 'refunded'))) {
         return '';
     }
 
@@ -310,8 +310,8 @@ function paykka_add_place_order_note($order, $channel = '', $extra = array())
     if ($session_id !== '') {
         $parts[] = 'session_id=' . $session_id;
     }
-    $parts[] = 'at ' . gmdate('Y-m-d H:i:s') . ' UTC';
 
+    // 备注本身带站点时区时间戳，无需再拼一个容易造成时区误解的 UTC 串
     $order->add_order_note(implode(' | ', $parts));
 }
 

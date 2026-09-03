@@ -4,7 +4,7 @@
  * Plugin Name:       PayKKa for WooCommerce
  * Plugin URI:        https://github.com/1404369980/paykka-for-woocommerce
  * Description:       PayKKa Hosted 与 Embedded Payments（卡 / Apple Pay / Google Pay），支持 WooCommerce 结账与 Blocks。
- * Version:           1.5.10
+ * Version:           1.5.11
  * Author:            Fengqiao Yi
  * Author URI:        https://github.com/1404369980/paykka-for-woocommerce
  * License:           GNU General Public License v3.0
@@ -14,6 +14,7 @@
  * GitHub Plugin URI: https://github.com/1404369980/paykka-for-woocommerce
  * Requires at least: 6.0
  * Tested up to: 6.6.2
+ * Requires PHP: 7.4
  * Requires Plugins: woocommerce
  * WC requires at least: 9.0.0
  * WC tested up to: 9.6.2
@@ -36,6 +37,23 @@ if (!defined('FENGQIAO_PAYKKA_URL')) {
 }
 
 
+if (!function_exists('plugin_abspath_paykka')) {
+    function plugin_abspath_paykka()
+    {
+        return trailingslashit(PAYKKA_PLUGIN_PATH);
+    }
+}
+if (!function_exists('plugin_url_paykka')) {
+    function plugin_url_paykka()
+    {
+        return untrailingslashit(PAYKKA_PLUGIN_URL);
+    }
+}
+
+add_action('init', function () {
+    load_plugin_textdomain('paykka-for-woocommerce', false, dirname(plugin_basename(__FILE__)) . '/i18n/languages/');
+});
+
 add_action('plugins_loaded', 'woocommerce_paykka_init', 0);
 function woocommerce_paykka_init()
 {
@@ -56,15 +74,6 @@ function woocommerce_paykka_init()
         return $methods;
     }
     add_filter('woocommerce_payment_gateways', 'woocommerce_paykka_add_gateway');
-
-    function plugin_abspath_paykka()
-    {
-        return trailingslashit(plugin_dir_path(__FILE__));
-    }
-    function plugin_url_paykka()
-    {
-        return untrailingslashit(plugins_url('/', __FILE__));
-    }
 
     require_once $base . 'classes/wc-paykka-credit-card-gateway.php';
     require_once $base . 'classes/wc-paykka-card-gateway.php';
