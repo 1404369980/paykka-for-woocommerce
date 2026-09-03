@@ -308,8 +308,8 @@ class PaykkaRequestHandler
 
         $now = new \DateTime('now', new \DateTimeZone('UTC'));
         $now->setTimezone(new \DateTimeZone('Asia/Hong_Kong'));
-        // COMPONENT/结账页需要更长有效期，避免填写卡信息时过期；Hosted 保持较短
-        $ttl = ($session_mode === 'COMPONENT' || $session_mode === 'DROP_IN') ? 'PT30M' : 'PT5M';
+        // Hosted / COMPONENT / DROP_IN Session 有效期均为 1 小时
+        $ttl = 'PT1H';
         $now->add(new \DateInterval($ttl));
         $expire_time = $now->format('Y-m-d\TH:i:sO');
 
