@@ -641,7 +641,7 @@
         const cachedReady =
             !!(cardCache.checkout && cardCache.sessionData && (cardCache.card || cardCache.applePay || cardCache.googlePay));
         const [status, setStatus] = useState(
-            cachedReady ? i18n.ready || 'Ready' : i18n.loading || 'Loading…'
+            cachedReady ? '' : i18n.loading || 'Loading…'
         );
         const [error, setError] = useState('');
         const [ready, setReady] = useState(cachedReady);
@@ -662,7 +662,7 @@
             }
             setReady(true);
             setError('');
-            setStatus(i18n.ready || 'Ready');
+            setStatus('');
             return true;
         }, []);
 
@@ -702,7 +702,7 @@
                     const message = formatFormValidateError(formValidateError);
                     if (message) {
                         setError(message);
-                        setStatus(i18n.ready || 'Ready');
+                        setStatus('');
                         if (cardCache.payResolver) {
                             cardCache.payResolver({ ok: false, message: message });
                             cardCache.payResolver = null;
@@ -743,7 +743,7 @@
                 onError: function (err) {
                     const message = formatPaykkaError(err, i18n.error || 'Payment failed');
                     setError(message);
-                    setStatus(i18n.ready || 'Ready');
+                    setStatus('');
                     if (cardCache.payResolver) {
                         cardCache.payResolver({ ok: false, message: message });
                         cardCache.payResolver = null;
@@ -752,7 +752,7 @@
                 onTimeout: function () {
                     const message = i18n.error || 'Payment timeout';
                     setError(message);
-                    setStatus(i18n.ready || 'Ready');
+                    setStatus('');
                     if (cardCache.payResolver) {
                         cardCache.payResolver({ ok: false, message: message });
                         cardCache.payResolver = null;
@@ -794,7 +794,7 @@
                     const message = formatFormValidateError(formValidateError);
                     if (message) {
                         setError(message);
-                        setStatus(i18n.ready || 'Ready');
+                        setStatus('');
                         if (cardCache.payResolver) {
                             cardCache.payResolver({ ok: false, message: message });
                             cardCache.payResolver = null;
@@ -817,7 +817,7 @@
                 attachAll(appleRef.current, googleRef.current, mountRef.current);
                 setReady(true);
                 setError('');
-                setStatus(i18n.ready || 'Ready');
+                setStatus('');
             }
         }, []);
 
@@ -833,7 +833,7 @@
                     noteDiag('session', 'blocked:billing');
                     setReady(false);
                     setError('');
-                    setStatus(i18n.needBilling || 'Need billing');
+                    setStatus('');
                     return;
                 }
                 noteDiag('billing', 'ok');
@@ -1036,7 +1036,7 @@
                             cardCache.payResolver = null;
                             clearTimeout(timer);
                             if (!result || result.ok === false) {
-                                setStatus(i18n.ready || 'Ready');
+                                setStatus('');
                                 resolve({
                                     type: emitResponse.responseTypes.ERROR,
                                     message:

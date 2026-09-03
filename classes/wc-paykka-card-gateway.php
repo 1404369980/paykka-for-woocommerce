@@ -11,7 +11,7 @@ use lib\Paykka\Request\PaykkaCallBackHandler;
 class Paykka_Card_Gateway extends WC_Payment_Gateway
 {
     /** @var string */
-    public $version = '1.5.13';
+    public $version = '1.5.15';
 
     public function __construct()
     {

@@ -31,7 +31,7 @@ final class WC_Gateway_Paykka_Support extends AbstractPaymentMethodType
             'wc-paykka-gateway-blocks',
             PAYKKA_PLUGIN_URL . 'assets/js/blocks.js',
             array('wc-blocks-registry', 'wc-settings', 'wp-element', 'wp-i18n'),
-            '1.5.13',
+            '1.5.15',
             true
         );
         if (function_exists('wp_set_script_translations')) {
