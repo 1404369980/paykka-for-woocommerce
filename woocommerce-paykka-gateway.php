@@ -4,7 +4,7 @@
  * Plugin Name:       PayKKa for WooCommerce
  * Plugin URI:        https://github.com/1404369980/paykka-for-woocommerce
  * Description:       PayKKa Hosted 与 Embedded Payments（卡 / Apple Pay / Google Pay），支持 WooCommerce 结账与 Blocks。
- * Version:           1.5.6
+ * Version:           1.5.10
  * Author:            Fengqiao Yi
  * Author URI:        https://github.com/1404369980/paykka-for-woocommerce
  * License:           GNU General Public License v3.0
@@ -68,12 +68,15 @@ function woocommerce_paykka_init()
 
     require_once $base . 'classes/wc-paykka-credit-card-gateway.php';
     require_once $base . 'classes/wc-paykka-card-gateway.php';
+    require_once $base . 'classes/admin/class-paykka-order-list.php';
+    paykka_register_order_list_hooks();
 
     /**
      * wc-ajax 在 template_redirect 触发；此时若仅依赖网关构造函数注册 hook，
      * 支付网关可能尚未实例化，会导致 200 空响应（前端 JSON parse 失败）。
      */
     add_action('wc_ajax_paykka_card_create_session', 'paykka_card_ajax_create_session');
+    add_action('wc_ajax_paykka_card_place_order_note', 'paykka_card_ajax_place_order_note');
 }
 
 /**
@@ -89,6 +92,21 @@ function paykka_card_ajax_create_session()
         wp_send_json_error(array('message' => __('Credit Card gateway unavailable', 'paykka-for-woocommerce')), 500);
     }
     $gateways['paykka-card']->ajax_create_session();
+}
+
+/**
+ * Blocks Payments：下单写订单备注。
+ */
+function paykka_card_ajax_place_order_note()
+{
+    if (!function_exists('WC') || !WC()->payment_gateways()) {
+        wp_send_json_error(array('message' => __('WooCommerce unavailable', 'paykka-for-woocommerce')), 500);
+    }
+    $gateways = WC()->payment_gateways()->payment_gateways();
+    if (empty($gateways['paykka-card']) || !is_object($gateways['paykka-card']) || !method_exists($gateways['paykka-card'], 'ajax_place_order_note')) {
+        wp_send_json_error(array('message' => __('Payments gateway unavailable', 'paykka-for-woocommerce')), 500);
+    }
+    $gateways['paykka-card']->ajax_place_order_note();
 }
 
 

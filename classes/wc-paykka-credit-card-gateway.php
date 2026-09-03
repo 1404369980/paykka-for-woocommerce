@@ -28,7 +28,7 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
     {
         $this->id = 'paykka';
         $this->has_fields = false;
-        $this->version = '1.5.6';
+        $this->version = '1.5.10';
         $this->icon = '';
         $this->method_description = __('结账页显示「Paykka Hosted」，顾客选择后跳转 Paykka Hosted 收银台完成支付。', 'paykka-for-woocommerce');
         $this->method_title = __('Paykka Hosted', 'paykka-for-woocommerce');
@@ -410,6 +410,12 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
             if ($session_id !== '') {
                 $order->update_meta_data('_paykka_session_id', sanitize_text_field($session_id));
                 $order->save();
+            }
+            if (function_exists('paykka_add_place_order_note')) {
+                paykka_add_place_order_note($order, 'hosted', array(
+                    'trans_id'   => (string) $order->get_meta('_paykka_trans_id', true),
+                    'session_id' => $session_id,
+                ));
             }
             WC()->cart->empty_cart();
             return array('result' => 'success', 'redirect' => $session_url);

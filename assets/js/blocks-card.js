@@ -30,6 +30,7 @@
         readyMethods: [],
         parking: null,
         payResolver: null,
+        skipSubmitNote: false,
     };
 
     function ensureParking() {
@@ -125,6 +126,7 @@
         cardCache.googlePay = null;
         cardCache.readyMethods = [];
         cardCache.payResolver = null;
+        cardCache.skipSubmitNote = false;
         if (cardCache.parking && cardCache.parking.parentNode) {
             cardCache.parking.innerHTML = '';
         }
@@ -151,6 +153,36 @@
     function hasPaymentMethod(codes, needle) {
         const target = String(needle).toUpperCase();
         return codes.indexOf(target) !== -1;
+    }
+
+    function notePlaceOrder() {
+        const url = settings.noteAjaxUrl;
+        if (!url) {
+            return Promise.resolve(false);
+        }
+        const body = new URLSearchParams();
+        body.set('security', settings.nonce || '');
+        return fetch(url, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+            },
+            body: body.toString(),
+        })
+            .then(function (response) {
+                return response.text().then(function (raw) {
+                    try {
+                        const json = raw ? JSON.parse(raw) : null;
+                        return !!(json && json.success);
+                    } catch (e) {
+                        return false;
+                    }
+                });
+            })
+            .catch(function () {
+                return false;
+            });
     }
 
     function mapBlocksAddress(prefix, address) {
@@ -428,7 +460,15 @@
                             cardCache.payResolver({ ok: false, message: message });
                             cardCache.payResolver = null;
                         }
+                        return;
                     }
+                    // WC「下单」触发的 payment() 已写过备注，避免重复
+                    if (cardCache.skipSubmitNote) {
+                        cardCache.skipSubmitNote = false;
+                        return;
+                    }
+                    // Apple Pay / Google Pay 按钮提交
+                    notePlaceOrder();
                 },
                 onSuccess: function (payload) {
                     cardCache.payResolver = null;
@@ -711,6 +751,7 @@
 
                     setStatus(i18n.paying || 'Paying…');
                     setError('');
+                    cardCache.skipSubmitNote = true;
 
                     return new Promise(function (resolve) {
                         let settled = false;
@@ -722,6 +763,7 @@
                             cardCache.payResolver = null;
                             clearTimeout(timer);
                             if (!result || result.ok === false) {
+                                cardCache.skipSubmitNote = false;
                                 setStatus(i18n.ready || 'Ready');
                                 resolve({
                                     type: emitResponse.responseTypes.ERROR,
@@ -744,22 +786,25 @@
                             });
                         }, 60000);
 
-                        try {
-                            const maybe = cardCache.card.ref.payment();
-                            if (maybe && typeof maybe.then === 'function') {
-                                maybe.catch(function (err) {
-                                    finish({
-                                        ok: false,
-                                        message: (err && err.message) || i18n.needCard || i18n.error,
+                        notePlaceOrder().finally(function () {
+                            try {
+                                const maybe = cardCache.card.ref.payment();
+                                if (maybe && typeof maybe.then === 'function') {
+                                    maybe.catch(function (err) {
+                                        finish({
+                                            ok: false,
+                                            message:
+                                                (err && err.message) || i18n.needCard || i18n.error,
+                                        });
                                     });
+                                }
+                            } catch (err) {
+                                finish({
+                                    ok: false,
+                                    message: (err && err.message) || i18n.needCard || i18n.error,
                                 });
                             }
-                        } catch (err) {
-                            finish({
-                                ok: false,
-                                message: (err && err.message) || i18n.needCard || i18n.error,
-                            });
-                        }
+                        });
                     });
                 });
                 return unsubscribe;

@@ -11,7 +11,7 @@ use lib\Paykka\Request\PaykkaCallBackHandler;
 class Paykka_Card_Gateway extends WC_Payment_Gateway
 {
     /** @var string */
-    public $version = '1.5.6';
+    public $version = '1.5.10';
 
     public function __construct()
     {
@@ -119,6 +119,31 @@ class Paykka_Card_Gateway extends WC_Payment_Gateway
             wp_send_json_error(array('message' => $result->get_error_message()), 400);
         }
         wp_send_json_success($result);
+    }
+
+    /**
+     * Payments 下单时写订单备注。
+     */
+    public function ajax_place_order_note()
+    {
+        if (!check_ajax_referer('paykka_card_checkout', 'security', false)) {
+            wp_send_json_error(array('message' => __('安全校验失败，请刷新结账页后重试。', 'paykka-for-woocommerce')), 403);
+        }
+        if (!function_exists('WC') || !WC()->session) {
+            wp_send_json_error(array('message' => __('Session unavailable', 'paykka-for-woocommerce')), 400);
+        }
+        $order_id = absint(WC()->session->get('paykka_card_checkout_order_id'));
+        if (!$order_id) {
+            $order_id = absint(WC()->session->get('order_awaiting_payment'));
+        }
+        $order = $order_id ? wc_get_order($order_id) : null;
+        if (!$order || !$order->get_id()) {
+            wp_send_json_error(array('message' => __('Order not found', 'paykka-for-woocommerce')), 404);
+        }
+        if (function_exists('paykka_add_place_order_note')) {
+            paykka_add_place_order_note($order, 'card');
+        }
+        wp_send_json_success(array('order_id' => (int) $order->get_id()));
     }
 
     /**

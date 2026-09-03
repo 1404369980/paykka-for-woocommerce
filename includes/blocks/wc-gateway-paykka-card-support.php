@@ -26,7 +26,7 @@ final class WC_Gateway_Paykka_Card_Support extends AbstractPaymentMethodType
 
     public function get_payment_method_script_handles()
     {
-        $version = '1.5.6';
+        $version = '1.5.10';
         $checkout_url = function_exists('paykka_get_checkout_base_url') ? paykka_get_checkout_base_url() : '';
         $script_url   = rtrim($checkout_url, '/') . '/cp/card-checkout-ui.js';
         $style_url    = rtrim($checkout_url, '/') . '/cp/style.css';
@@ -76,6 +76,7 @@ final class WC_Gateway_Paykka_Card_Support extends AbstractPaymentMethodType
             'description' => '',
             'supports'    => $this->get_supported_features(),
             'ajaxUrl'     => WC_AJAX::get_endpoint('paykka_card_create_session'),
+            'noteAjaxUrl' => WC_AJAX::get_endpoint('paykka_card_place_order_note'),
             'nonce'       => wp_create_nonce('paykka_card_checkout'),
             'clientKey'   => isset($settings['paykka_client_key']) ? $settings['paykka_client_key'] : '',
             'env'         => $env,

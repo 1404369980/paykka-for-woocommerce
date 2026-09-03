@@ -262,9 +262,57 @@ function paykka_begin_payment_attempt($order, $channel = 'hosted')
     $order->update_meta_data('_paykka_sub_method', $channel);
     $order->delete_meta_data('_paykka_session_id');
     $order->delete_meta_data('_paykka_session_fingerprint');
+    // 允许再次 Create Session：清除历史下单锁定标记
+    $order->delete_meta_data('_paykka_session_locked');
+    $order->delete_meta_data('_paykka_session_url');
     $order->save();
 
     return $trans_id;
+}
+
+/**
+ * 每次顾客下单（发起支付）写一条订单备注。
+ *
+ * @param \WC_Order $order
+ * @param string    $channel hosted|card
+ * @param array     $extra   可选补充字段
+ */
+function paykka_add_place_order_note($order, $channel = '', $extra = array())
+{
+    if (!$order || !is_a($order, 'WC_Order')) {
+        return;
+    }
+
+    $channel = $channel !== '' ? $channel : (string) $order->get_meta('_paykka_sub_method', true);
+    if ($channel === '') {
+        $channel = 'paykka';
+    }
+
+    $trans_id   = trim((string) $order->get_meta('_paykka_trans_id', true));
+    $session_id = trim((string) $order->get_meta('_paykka_session_id', true));
+    if ($trans_id === '' && !empty($extra['trans_id'])) {
+        $trans_id = trim((string) $extra['trans_id']);
+    }
+    if ($session_id === '' && !empty($extra['session_id'])) {
+        $session_id = trim((string) $extra['session_id']);
+    }
+
+    $parts = array(
+        sprintf(
+            /* translators: %s: payment channel (hosted|card) */
+            __('PayKKa place order (%s)', 'paykka-for-woocommerce'),
+            $channel
+        ),
+    );
+    if ($trans_id !== '') {
+        $parts[] = 'trans_id=' . $trans_id;
+    }
+    if ($session_id !== '') {
+        $parts[] = 'session_id=' . $session_id;
+    }
+    $parts[] = 'at ' . gmdate('Y-m-d H:i:s') . ' UTC';
+
+    $order->add_order_note(implode(' | ', $parts));
 }
 
 /** @var string 订单 meta：待绑定到 WC 退款单的 PayKKa 流水队列（FIFO） */
