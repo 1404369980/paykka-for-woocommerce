@@ -40,6 +40,31 @@
         lastNoteAt: 0,
     };
 
+    const diagnostics = settings.diagnostics || {};
+    const isSandbox = !!diagnostics.sandbox;
+
+    /**
+     * 浏览器侧才能观察到的失败点（SDK 是否真的加载、AJAX 状态码、挂载结果）。
+     * 服务端自检只覆盖配置，两边合起来才能定位「Payments 打不开」。
+     */
+    const runtimeDiag = {
+        sdk: '',
+        session: '',
+        billing: '',
+        mounted: false,
+        lastError: '',
+    };
+
+    /**
+     * 沙箱下才记录，生产环境不保留任何诊断痕迹。
+     */
+    function noteDiag(key, value) {
+        if (!isSandbox) {
+            return;
+        }
+        runtimeDiag[key] = value;
+    }
+
     function ensureParking() {
         if (cardCache.parking && cardCache.parking.parentNode) {
             return cardCache.parking;
@@ -434,9 +459,11 @@
 
     function loadSdk() {
         if (window.PayKKaCardCheckoutUI) {
+            noteDiag('sdk', 'ok');
             return Promise.resolve();
         }
         if (!settings.sdkUrl) {
+            noteDiag('sdk', 'fail:missing-url');
             return Promise.reject(new Error('Missing PayKKa SDK URL'));
         }
         return new Promise(function (resolve, reject) {
@@ -447,9 +474,149 @@
                 script.async = true;
                 document.head.appendChild(script);
             }
-            script.addEventListener('load', resolve, { once: true });
-            script.addEventListener('error', reject, { once: true });
+            script.addEventListener(
+                'load',
+                function () {
+                    // 脚本 200 了但没暴露全局对象，同样算加载失败
+                    noteDiag('sdk', window.PayKKaCardCheckoutUI ? 'ok' : 'fail:no-global');
+                    resolve();
+                },
+                { once: true }
+            );
+            script.addEventListener(
+                'error',
+                function () {
+                    noteDiag('sdk', 'fail:network');
+                    reject(new Error('Failed to load ' + settings.sdkUrl));
+                },
+                { once: true }
+            );
         });
+    }
+
+    const DIAG_LEVEL_ORDER = { fail: 0, warn: 1, pending: 2, ok: 3 };
+    const DIAG_MARKS = { fail: '×', warn: '!', pending: '…', ok: '✓' };
+
+    /**
+     * 把运行时记录（'ok:HTTP 200' / 'fail:network' / 'blocked:billing' / ''）
+     * 翻译成展示等级与可读文字。
+     */
+    function describeRuntime(value) {
+        const raw = typeof value === 'string' ? value : '';
+        if (raw === '') {
+            return { level: 'pending', detail: i18n.diagPending || 'Not reached yet' };
+        }
+        const sep = raw.indexOf(':');
+        const kind = sep === -1 ? raw : raw.slice(0, sep);
+        const rest = sep === -1 ? '' : raw.slice(sep + 1);
+        if (kind === 'ok') {
+            return { level: 'ok', detail: rest || i18n.diagYes || 'Yes' };
+        }
+        if (kind === 'blocked') {
+            const reasons = {
+                billing: i18n.needBilling || 'Billing fields incomplete',
+                validation: i18n.fixInvalid || 'Checkout fields invalid',
+            };
+            return { level: 'fail', detail: reasons[rest] || rest };
+        }
+        return { level: 'fail', detail: rest || kind };
+    }
+
+    function buildDiagRows() {
+        const rows = [];
+
+        // 浏览器侧：按实际执行顺序列出四个卡点
+        rows.push({ label: i18n.diagBilling || 'Billing', runtime: runtimeDiag.billing });
+        rows.push({ label: i18n.diagSession || 'Create Session', runtime: runtimeDiag.session });
+        rows.push({ label: i18n.diagSdk || 'Card SDK', runtime: runtimeDiag.sdk });
+        rows.push({
+            label: i18n.diagMount || 'Card component',
+            runtime: runtimeDiag.mounted ? 'ok' : '',
+        });
+
+        const items = rows.map(function (row) {
+            const described = describeRuntime(row.runtime);
+            return {
+                level: described.level,
+                label: row.label,
+                detail: described.detail,
+            };
+        });
+
+        // 服务端自检：配置、密钥、SDK/API 可达性
+        (Array.isArray(diagnostics.checks) ? diagnostics.checks : []).forEach(function (check) {
+            items.push({
+                level: check && check.level ? check.level : 'ok',
+                label: (check && check.label) || '',
+                detail: (check && check.detail) || '',
+            });
+        });
+
+        if (runtimeDiag.lastError) {
+            items.push({
+                level: 'fail',
+                label: i18n.diagLastError || 'Last error',
+                detail: runtimeDiag.lastError,
+            });
+        }
+
+        // 先看拦路的项，ok 的沉到底部
+        return items
+            .map(function (item, index) {
+                return { item: item, index: index };
+            })
+            .sort(function (a, b) {
+                const la = DIAG_LEVEL_ORDER[a.item.level];
+                const lb = DIAG_LEVEL_ORDER[b.item.level];
+                const oa = la === undefined ? 3 : la;
+                const ob = lb === undefined ? 3 : lb;
+                return oa === ob ? a.index - b.index : oa - ob;
+            })
+            .map(function (entry) {
+                return entry.item;
+            });
+    }
+
+    function DiagnosticsPanel() {
+        const items = buildDiagRows();
+        if (!items.length) {
+            return null;
+        }
+
+        return createElement(
+            'div',
+            { className: 'paykka-card-diagnostics' },
+            createElement(
+                'p',
+                { className: 'paykka-diag-title' },
+                i18n.diagTitle || 'Payments self-check (sandbox only)'
+            ),
+            createElement(
+                'ul',
+                { className: 'paykka-diag-list' },
+                items.map(function (item, index) {
+                    return createElement(
+                        'li',
+                        {
+                            key: 'paykka-diag-' + index,
+                            className: 'paykka-diag-item is-' + item.level,
+                        },
+                        createElement(
+                            'span',
+                            { className: 'paykka-diag-mark', 'aria-hidden': 'true' },
+                            DIAG_MARKS[item.level] || DIAG_MARKS.ok
+                        ),
+                        createElement('span', { className: 'paykka-diag-label' }, item.label),
+                        createElement('span', { className: 'paykka-diag-detail' }, item.detail)
+                    );
+                })
+            ),
+            createElement(
+                'p',
+                { className: 'paykka-diag-hint' },
+                i18n.diagHint || 'Sandbox mode only.'
+            )
+        );
     }
 
     function Label(props) {
@@ -478,6 +645,8 @@
         );
         const [error, setError] = useState('');
         const [ready, setReady] = useState(cachedReady);
+        // 沙箱：加载迟迟不结束时摊开自检结果（报错则立即展示，不等这个窗口）
+        const [stalled, setStalled] = useState(false);
 
         const restoreCached = useCallback(function (sig) {
             if (
@@ -523,6 +692,8 @@
                         return;
                     }
                     const message = formatPaykkaError(err, i18n.error || 'Init error');
+                    noteDiag('mounted', false);
+                    noteDiag('lastError', 'init: ' + message);
                     setReady(false);
                     setError(message);
                     setStatus('');
@@ -640,6 +811,7 @@
             cardCache.sessionData = data;
             cardCache.signature = sig;
             retryNewSessionRef.current = false;
+            noteDiag('mounted', true);
 
             if (mountRef.current || appleRef.current || googleRef.current) {
                 attachAll(appleRef.current, googleRef.current, mountRef.current);
@@ -657,15 +829,19 @@
 
                 if (!payload.billing_email || !payload.billing_country) {
                     destroyCachedCard();
+                    noteDiag('billing', 'fail:incomplete');
+                    noteDiag('session', 'blocked:billing');
                     setReady(false);
                     setError('');
                     setStatus(i18n.needBilling || 'Need billing');
                     return;
                 }
+                noteDiag('billing', 'ok');
 
                 const checkoutBlocker = getCheckoutValidationBlocker();
                 if (checkoutBlocker) {
                     destroyCachedCard();
+                    noteDiag('session', 'blocked:validation');
                     setReady(false);
                     setStatus('');
                     setError(checkoutBlocker);
@@ -720,6 +896,11 @@
                     try {
                         json = raw ? JSON.parse(raw) : null;
                     } catch (parseErr) {
+                        // 200 空响应通常是 PHP fatal 或 wc-ajax 端点被劫持
+                        noteDiag(
+                            'session',
+                            'fail:HTTP ' + response.status + (raw ? ':not-json' : ':empty-body')
+                        );
                         throw new Error(
                             (i18n.error || 'Session failed') + (raw ? '' : ' (empty response)')
                         );
@@ -728,21 +909,25 @@
                         return;
                     }
                     if (!json || !json.success || !json.data) {
+                        noteDiag('session', 'fail:HTTP ' + response.status);
                         throw new Error(
                             (json && json.data && json.data.message) ||
                                 i18n.error ||
                                 'Session failed'
                         );
                     }
+                    noteDiag('session', 'ok:HTTP ' + response.status);
                     await createCard(json.data, sig, requestSession);
                 } catch (err) {
                     if (seq !== requestSeq.current) {
                         return;
                     }
                     destroyCachedCard();
+                    const message = formatPaykkaError(err, i18n.error || 'Error');
+                    noteDiag('lastError', message);
                     setReady(false);
                     setStatus('');
-                    setError(formatPaykkaError(err, i18n.error || 'Error'));
+                    setError(message);
                 } finally {
                     if (seq === requestSeq.current) {
                         inFlightRef.current = false;
@@ -773,6 +958,25 @@
                 };
             },
             [sig, activePaymentMethod, requestSession, restoreCached]
+        );
+
+        useEffect(
+            function () {
+                if (!isSandbox || activePaymentMethod !== gatewayId) {
+                    return undefined;
+                }
+                if (ready) {
+                    setStalled(false);
+                    return undefined;
+                }
+                const timer = setTimeout(function () {
+                    setStalled(true);
+                }, 8000);
+                return function () {
+                    clearTimeout(timer);
+                };
+            },
+            [activePaymentMethod, ready]
         );
 
         useEffect(function () {
@@ -909,7 +1113,8 @@
             }),
             error
                 ? createElement('p', { className: 'paykka-card-error', role: 'alert' }, error)
-                : null
+                : null,
+            isSandbox && (error || stalled) ? createElement(DiagnosticsPanel, null) : null
         );
     }
 

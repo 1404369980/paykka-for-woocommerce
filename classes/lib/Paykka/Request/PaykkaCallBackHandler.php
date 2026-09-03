@@ -16,6 +16,50 @@ class PaykkaCallBackHandler
         ), home_url('/'));
     }
 
+    /**
+     * 「为已有订单付款」（order-pay）发起的支付：购物车与本单无关，失败也应回到该订单的付款页。
+     *
+     * @param \WC_Order $order
+     * @return bool
+     */
+    private static function isPayForOrder($order)
+    {
+        return $order && $order->get_meta('_paykka_pay_for_order', true) === 'yes';
+    }
+
+    /**
+     * 支付成功后收尾：只有购物车结账才清空购物车与结账 session。
+     *
+     * @param \WC_Order $order
+     */
+    private static function finishSuccess($order)
+    {
+        if (!function_exists('WC')) {
+            return;
+        }
+        if (!self::isPayForOrder($order) && WC()->cart) {
+            WC()->cart->empty_cart();
+        }
+        if (WC()->session) {
+            WC()->session->__unset('paykka_card_checkout_order_id');
+            WC()->session->__unset('paykka_checkout_order_id');
+        }
+    }
+
+    /**
+     * 未付成功时的重试地址：order-pay 来的回该订单付款页，否则回结账页。
+     *
+     * @param \WC_Order $order
+     * @return string
+     */
+    private static function getRetryUrl($order)
+    {
+        if (self::isPayForOrder($order) && $order->needs_payment()) {
+            return $order->get_checkout_payment_url();
+        }
+        return wc_get_checkout_url();
+    }
+
     public function handle_payment_callback()
     {
         $order_id = isset($_REQUEST['order_id']) ? absint($_REQUEST['order_id']) : 0;
@@ -31,13 +75,7 @@ class PaykkaCallBackHandler
         }
 
         if ($order->get_status() === 'processing' || $order->get_status() === 'completed') {
-            if (function_exists('WC') && WC()->cart) {
-                WC()->cart->empty_cart();
-            }
-            if (function_exists('WC') && WC()->session) {
-                WC()->session->__unset('paykka_card_checkout_order_id');
-                WC()->session->__unset('paykka_checkout_order_id');
-            }
+            self::finishSuccess($order);
             wp_safe_redirect($order->get_checkout_order_received_url());
             exit;
         }
@@ -63,13 +101,7 @@ class PaykkaCallBackHandler
             if (($is_transaction && in_array($status, array('SUCCESS', 'AUTHORIZED'), true))
                 || ($order && in_array($order->get_status(), array('processing', 'completed', 'on-hold'), true))
             ) {
-                if (function_exists('WC') && WC()->cart) {
-                    WC()->cart->empty_cart();
-                }
-                if (function_exists('WC') && WC()->session) {
-                    WC()->session->__unset('paykka_card_checkout_order_id');
-                    WC()->session->__unset('paykka_checkout_order_id');
-                }
+                self::finishSuccess($order);
                 wp_safe_redirect($order->get_checkout_order_received_url());
                 exit;
             }
@@ -84,7 +116,7 @@ class PaykkaCallBackHandler
                     wc_add_notice(__('Your payment is still being confirmed. Please refresh in a moment or contact support.', 'paykka-for-woocommerce'), 'notice');
                 }
             }
-            wp_safe_redirect(wc_get_checkout_url());
+            wp_safe_redirect(self::getRetryUrl($order));
             exit;
         }
 
@@ -101,7 +133,7 @@ class PaykkaCallBackHandler
         if (function_exists('wc_add_notice')) {
             wc_add_notice(__('We cannot confirm the payment result right now. Please try again later or contact support.', 'paykka-for-woocommerce'), 'error');
         }
-        wp_safe_redirect(wc_get_checkout_url());
+        wp_safe_redirect(self::getRetryUrl($order));
         exit;
     }
 }

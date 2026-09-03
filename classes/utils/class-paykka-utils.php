@@ -201,6 +201,30 @@ function getPaykkaSettings()
 }
 
 /**
+ * 一次性迁移：把 Payments 网关的历史默认标题 Credit Card 改为 Payments。
+ *
+ * 只执行一次，之后完全以商家在后台保存的标题为准（包括改回 Credit Card）。
+ */
+function paykka_migrate_card_gateway_title()
+{
+    if (get_option('paykka_card_title_migrated', 'no') === 'yes') {
+        return;
+    }
+    // 先落标记，避免任何一次异常导致反复覆盖商家自定义标题
+    update_option('paykka_card_title_migrated', 'yes');
+
+    $settings = get_option('woocommerce_paykka-card_settings', array());
+    if (!is_array($settings) || !isset($settings['title'])) {
+        return;
+    }
+    if (trim((string) $settings['title']) !== 'Credit Card') {
+        return;
+    }
+    $settings['title'] = 'Payments';
+    update_option('woocommerce_paykka-card_settings', $settings);
+}
+
+/**
  * 读取 Hosted 前台文案。
  * 历史版本把中文默认值写进了选项表，迁移为「视作未设置」，以便按站点语言取默认值。
  *

@@ -4,7 +4,7 @@
  * Plugin Name:       PayKKa for WooCommerce
  * Plugin URI:        https://github.com/1404369980/paykka-for-woocommerce
  * Description:       PayKKa Hosted 与 Embedded Payments（卡 / Apple Pay / Google Pay），支持 WooCommerce 结账与 Blocks。
- * Version:           1.5.12
+ * Version:           1.5.13
  * Author:            Fengqiao Yi
  * Author URI:        https://github.com/1404369980/paykka-for-woocommerce
  * License:           GNU General Public License v3.0
@@ -62,6 +62,7 @@ function woocommerce_paykka_init()
     }
     $base = plugin_dir_path(__FILE__);
     require_once $base . 'classes/utils/class-paykka-utils.php';
+    require_once $base . 'classes/utils/class-paykka-card-diagnostics.php';
     require_once $base . 'classes/lib/Paykka/Request/PaykkaCallBackHandler.php';
     require_once $base . 'classes/lib/Paykka/Request/PaykkaWebHookHandler.php';
     new \lib\Paykka\Request\PaykkaWebHookHandler();
@@ -80,12 +81,15 @@ function woocommerce_paykka_init()
     require_once $base . 'classes/admin/class-paykka-order-list.php';
     paykka_register_order_list_hooks();
 
+    add_action('init', 'paykka_migrate_card_gateway_title', 5);
+
     /**
      * wc-ajax 在 template_redirect 触发；此时若仅依赖网关构造函数注册 hook，
      * 支付网关可能尚未实例化，会导致 200 空响应（前端 JSON parse 失败）。
      */
     add_action('wc_ajax_paykka_card_create_session', 'paykka_card_ajax_create_session');
     add_action('wc_ajax_paykka_card_place_order_note', 'paykka_card_ajax_place_order_note');
+    add_action('wc_ajax_paykka_card_create_order_pay_session', 'paykka_card_ajax_create_order_pay_session');
 }
 
 /**
@@ -101,6 +105,65 @@ function paykka_card_ajax_create_session()
         wp_send_json_error(array('message' => __('Credit Card gateway unavailable', 'paykka-for-woocommerce')), 500);
     }
     $gateways['paykka-card']->ajax_create_session();
+}
+
+/**
+ * 经典 order-pay 表单提交时标记「为已有订单付款」。
+ *
+ * Hosted 走整页跳转，回来时已无从判断入口；有了这个标记，回调失败才能回到该订单的
+ * 付款页，而不是空购物车的结账页。Payments（内嵌）在创建 session 时自行标记。
+ *
+ * @param \WC_Order $order
+ */
+function paykka_flag_pay_for_order($order)
+{
+    if (!$order || !is_a($order, 'WC_Order')) {
+        return;
+    }
+    $method = isset($_POST['payment_method']) ? wc_clean(wp_unslash($_POST['payment_method'])) : '';
+    if (!in_array($method, array('paykka', 'paykka-card'), true)) {
+        return;
+    }
+    $order->update_meta_data('_paykka_pay_for_order', 'yes');
+    $order->save();
+}
+add_action('woocommerce_before_pay_action', 'paykka_flag_pay_for_order');
+
+/**
+ * order-pay（用户订单列表 → 付款）页加载内嵌组件资源。
+ *
+ * 该页由经典 form-pay.php 渲染，Blocks 的支付方式脚本不会加载；而网关实例化发生在
+ * 模板渲染时（晚于 wp_enqueue_scripts），因此这里主动取网关来注册资源。
+ */
+function paykka_card_enqueue_order_pay_assets()
+{
+    if (is_admin() || !function_exists('is_wc_endpoint_url') || !is_wc_endpoint_url('order-pay')) {
+        return;
+    }
+    if (!function_exists('WC') || !WC()->payment_gateways()) {
+        return;
+    }
+    $gateways = WC()->payment_gateways()->payment_gateways();
+    if (empty($gateways['paykka-card']) || !is_object($gateways['paykka-card']) || !method_exists($gateways['paykka-card'], 'payment_scripts')) {
+        return;
+    }
+    $gateways['paykka-card']->payment_scripts();
+}
+add_action('wp_enqueue_scripts', 'paykka_card_enqueue_order_pay_assets');
+
+/**
+ * order-pay（用户订单列表 → 付款）：为已有订单创建 PayKKa session。
+ */
+function paykka_card_ajax_create_order_pay_session()
+{
+    if (!function_exists('WC') || !WC()->payment_gateways()) {
+        wp_send_json_error(array('message' => __('WooCommerce unavailable', 'paykka-for-woocommerce')), 500);
+    }
+    $gateways = WC()->payment_gateways()->payment_gateways();
+    if (empty($gateways['paykka-card']) || !is_object($gateways['paykka-card']) || !method_exists($gateways['paykka-card'], 'ajax_create_order_pay_session')) {
+        wp_send_json_error(array('message' => __('Payments gateway unavailable', 'paykka-for-woocommerce')), 500);
+    }
+    $gateways['paykka-card']->ajax_create_order_pay_session();
 }
 
 /**
@@ -183,6 +246,10 @@ function paykka_checkout_default_away_from_card()
         return;
     }
     if (!function_exists('is_checkout') || !is_checkout() || is_order_received_page()) {
+        return;
+    }
+    // order-pay 是为已有订单付款，没有「默认不选 Card」的诉求，交由顾客自行选择。
+    if (function_exists('is_wc_endpoint_url') && is_wc_endpoint_url('order-pay')) {
         return;
     }
     if (!function_exists('WC') || !WC()->session) {

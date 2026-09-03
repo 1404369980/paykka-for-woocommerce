@@ -20,13 +20,19 @@ final class WC_Gateway_Paykka_Card_Support extends AbstractPaymentMethodType
         if (($this->settings['enabled'] ?? 'no') !== 'yes') {
             return false;
         }
-        $keys = function_exists('getPaykkaSettings') ? getPaykkaSettings() : array();
-        return !empty($keys['paykka_client_key']) && !empty($keys['paykka_merchant_id']) && !empty($keys['paykka_private_key']);
+        $keys  = function_exists('getPaykkaSettings') ? getPaykkaSettings() : array();
+        $ready = !empty($keys['paykka_client_key']) && !empty($keys['paykka_merchant_id']) && !empty($keys['paykka_private_key']);
+        if ($ready) {
+            return true;
+        }
+
+        // 沙箱下密钥没配好也保持注册，否则支付方式整行消失，结账页无处提示缺了什么。
+        return function_exists('paykka_diag_enabled') && paykka_diag_enabled();
     }
 
     public function get_payment_method_script_handles()
     {
-        $version = '1.5.12';
+        $version = '1.5.13';
         $checkout_url = function_exists('paykka_get_checkout_base_url') ? paykka_get_checkout_base_url() : '';
         $script_url   = rtrim($checkout_url, '/') . '/cp/card-checkout-ui.js';
         $style_url    = rtrim($checkout_url, '/') . '/cp/style.css';
@@ -75,15 +81,22 @@ final class WC_Gateway_Paykka_Card_Support extends AbstractPaymentMethodType
             : (get_option('paykka_api_region', 'eu') === 'hk' ? 'hk' : 'eu');
         $checkout_url = function_exists('paykka_get_checkout_base_url') ? paykka_get_checkout_base_url() : '';
 
-        $title = isset($this->settings['title']) ? (string) $this->settings['title'] : '';
-        if ($title === '' || $title === 'Credit Card') {
+        // 标题以后台设置为准，仅在留空时回退到默认 Payments
+        $title = isset($this->settings['title']) ? trim((string) $this->settings['title']) : '';
+        if ($title === '') {
             $title = __('Payments', 'paykka-for-woocommerce');
         }
+
+        // 沙箱专用自检；生产环境 sandbox=false、checks 为空，前端不渲染任何诊断信息
+        $diagnostics = function_exists('paykka_diag_card_report')
+            ? paykka_diag_card_report()
+            : array('sandbox' => false, 'checks' => array(), 'meta' => array());
 
         return array(
             'title'       => $title,
             'description' => '',
             'supports'    => $this->get_supported_features(),
+            'diagnostics' => $diagnostics,
             'ajaxUrl'     => WC_AJAX::get_endpoint('paykka_card_create_session'),
             'noteAjaxUrl' => WC_AJAX::get_endpoint('paykka_card_place_order_note'),
             'nonce'       => wp_create_nonce('paykka_card_checkout'),
@@ -101,6 +114,16 @@ final class WC_Gateway_Paykka_Card_Support extends AbstractPaymentMethodType
                 'paying'      => __('Processing payment…', 'paykka-for-woocommerce'),
                 'needCard'    => __('Please enter your complete card details before placing the order, or use Apple Pay / Google Pay.', 'paykka-for-woocommerce'),
                 'fixInvalid' => __('Please fix the billing and address errors on the checkout page before paying.', 'paykka-for-woocommerce'),
+                'diagTitle'   => __('Payments self-check (sandbox only)', 'paykka-for-woocommerce'),
+                'diagHint'    => __('This panel is visible because the store runs in Paykka sandbox mode. Customers never see it in production.', 'paykka-for-woocommerce'),
+                'diagSdk'     => __('Card SDK loaded in browser', 'paykka-for-woocommerce'),
+                'diagSession' => __('Create Session request', 'paykka-for-woocommerce'),
+                'diagBilling' => __('Billing email and country', 'paykka-for-woocommerce'),
+                'diagMount'   => __('Card component mounted', 'paykka-for-woocommerce'),
+                'diagLastError' => __('Last error', 'paykka-for-woocommerce'),
+                'diagPending' => __('Not reached yet', 'paykka-for-woocommerce'),
+                'diagYes'     => __('Yes', 'paykka-for-woocommerce'),
+                'diagNo'      => __('No', 'paykka-for-woocommerce'),
             ),
         );
     }
