@@ -21,7 +21,7 @@ return array(
     ),
     'hk' => array(
         'api_base_url'      => 'https://openapi.paykka.com',
-        'checkout_base_url' => 'https://checkout.eu.paykka.com',
+        'checkout_base_url' => 'https://checkout.aq.paykka.com',
     ),
 
     // 测试/沙箱环境地址（仅当 env=sandbox 且未在后台填写时，此处生效）
