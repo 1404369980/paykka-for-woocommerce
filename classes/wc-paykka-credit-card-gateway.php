@@ -28,7 +28,7 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
     {
         $this->id = 'paykka';
         $this->has_fields = false;
-        $this->version = '1.5.15';
+        $this->version = '1.5.16';
         $this->icon = '';
         $this->method_description = __('Shows “Paykka Hosted” at checkout. Customers are redirected to the Paykka Hosted checkout to complete the payment.', 'paykka-for-woocommerce');
         $this->method_title = __('Paykka Hosted', 'paykka-for-woocommerce');
