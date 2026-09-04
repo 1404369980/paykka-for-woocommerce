@@ -41,7 +41,7 @@ class PaykkaRequestHandler
             return 'https://openapi-sandbox.paykka.com';
         }
         $region = get_option('paykka_api_region', 'eu');
-        return $region === 'hk' ? 'https://openapi.aq.paykka.com' : 'https://openapi.eu.paykka.com';
+        return $region === 'hk' ? 'https://openapi.paykka.com' : 'https://openapi.eu.paykka.com';
     }
 
     /**

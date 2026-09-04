@@ -207,8 +207,8 @@ msgid "Europe (https://openapi.eu.paykka.com)"
 msgstr "欧洲地区 (https://openapi.eu.paykka.com)"
 
 #: classes/wc-paykka-credit-card-gateway.php:256
-msgid "Hong Kong (https://openapi.aq.paykka.com)"
-msgstr "香港地区 (https://openapi.aq.paykka.com)"
+msgid "Hong Kong (https://openapi.paykka.com)"
+msgstr "香港地区 (https://openapi.paykka.com)"
 
 #: classes/wc-paykka-credit-card-gateway.php:259
 msgid "Region used for backend API calls in production. Europe and Hong Kong use different domains, so this must match the region of your Paykka account."

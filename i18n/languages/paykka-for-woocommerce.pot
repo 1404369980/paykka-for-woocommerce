@@ -233,7 +233,7 @@ msgid "Europe (https://openapi.eu.paykka.com)"
 msgstr ""
 
 #: classes/wc-paykka-credit-card-gateway.php:256
-msgid "Hong Kong (https://openapi.aq.paykka.com)"
+msgid "Hong Kong (https://openapi.paykka.com)"
 msgstr ""
 
 #: classes/wc-paykka-credit-card-gateway.php:259
