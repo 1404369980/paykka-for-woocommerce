@@ -100,10 +100,14 @@
         }
 
         var checkoutBase = data.checkout_base || config.checkoutBase || '';
+        var env = String(data.env || '').toLowerCase();
+        if (['eu', 'hk', 'sandbox'].indexOf(env) === -1) {
+            throw new Error(config.i18n.error || 'Invalid PayKKa environment');
+        }
         checkout = new sdk.PayKKaCheckout({
             sessionId: data.session_id,
             clientKey: data.client_key,
-            env: data.env,
+            env: env,
             returnUrl: data.return_url,
             hidePaymentButton: true,
             _envConfig: checkoutBase ? {

@@ -675,10 +675,15 @@
 
             destroyCachedCard();
 
+            const env = String(data.env || settings.env || '').toLowerCase();
+            if (!['eu', 'hk', 'sandbox'].includes(env)) {
+                throw new Error(i18n.error || 'Invalid PayKKa environment');
+            }
+
             const checkout = new sdk.PayKKaCheckout({
                 sessionId: data.session_id,
                 clientKey: data.client_key || settings.clientKey,
-                env: data.env || settings.env || 'sandbox',
+                env: env,
                 // 卡支付走 WC 下单按钮；钱包按钮由 Apple/Google 组件自身展示
                 hidePaymentButton: true,
                 onPaymentMethodsReady: function (methods) {

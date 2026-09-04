@@ -12,18 +12,6 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
     /** @var string 插件版本（避免 PHP 8.2+ 动态属性弃用） */
     public $version = '';
 
-    /** @var bool */
-    public $testmode = false;
-
-    /** @var string */
-    public $private_key = '';
-
-    /** @var string */
-    public $publishable_key = '';
-
-    /** @var string */
-    private $merchant_id = '';
-
     public function __construct()
     {
         $this->id = 'paykka';
@@ -52,11 +40,6 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
         $this->description = function_exists('paykka_get_hosted_text')
             ? paykka_get_hosted_text('paykka_description', __('Pay securely with the Paykka Hosted checkout', 'paykka-for-woocommerce'))
             : get_option('paykka_description', __('Pay securely with the Paykka Hosted checkout', 'paykka-for-woocommerce'));
-        $this->testmode = 'yes' === $this->get_option('testmode');
-        $this->private_key = $this->testmode ? $this->get_option('sandbox_private_key') : $this->get_option('private_key');
-
-        $this->publishable_key = $this->testmode ? $this->get_option('test_publishable_key') : $this->get_option('publishable_key');
-        $this->merchant_id = $this->testmode ? $this->get_option('sandbox_merchant_id') : $this->get_option('merchant_id');
         // 这个动作挂钩保存设置
         add_action('woocommerce_update_options_payment_gateways_' . $this->id, array($this, 'process_admin_options'));
         add_action('woocommerce_order_refunded', 'paykka_attach_refund_link_on_order_refunded', 10, 2);

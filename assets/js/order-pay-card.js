@@ -223,11 +223,15 @@
 
         var checkoutBase = data.checkout_base || config.checkoutBase || '';
         var returnUrl = data.return_url;
+        var env = String(data.env || '').toLowerCase();
+        if (['eu', 'hk', 'sandbox'].indexOf(env) === -1) {
+            throw new Error(i18n.error || 'Invalid PayKKa environment');
+        }
 
         checkout = new sdk.PayKKaCheckout({
             sessionId: data.session_id,
             clientKey: data.client_key,
-            env: data.env,
+            env: env,
             returnUrl: returnUrl,
             // 卡支付由「Pay for order」按钮触发；钱包按钮由各自组件展示
             hidePaymentButton: true,

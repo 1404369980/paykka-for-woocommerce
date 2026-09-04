@@ -49,7 +49,9 @@ class PaykkaRequestHandler
      */
     public function getAppId($merchant_id = '')
     {
-        $sandbox = get_option('paykka_sandbox_flag', 'no') === 'yes';
+        $sandbox = function_exists('paykka_is_sandbox')
+            ? paykka_is_sandbox()
+            : get_option('paykka_sandbox_flag', 'no') === 'yes';
         $app_id = $sandbox ? get_option('paykka_sandbox_app_id', '') : get_option('paykka_app_id', '');
         if ($app_id === '' && $merchant_id !== '') {
             $app_id = $merchant_id;

@@ -122,6 +122,16 @@ function paykka_get_api_region()
         }
     }
 
+    if (defined('PAYKKA_ENV')) {
+        $env = strtolower((string) PAYKKA_ENV);
+        if ($env === 'hk') {
+            return 'hk';
+        }
+        if ($env === 'eu') {
+            return 'eu';
+        }
+    }
+
     $region = get_option('paykka_api_region', 'eu');
     if ($region === 'ap') {
         return 'hk';
