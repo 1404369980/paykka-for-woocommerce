@@ -36,7 +36,7 @@ class PaykkaRequestHandler
         if (function_exists('paykka_get_api_base_url')) {
             return paykka_get_api_base_url();
         }
-        $sandbox = get_option('paykka_sandbox_flag') === 'yes';
+        $sandbox = get_option('paykka_sandbox_flag', 'no') === 'yes';
         if ($sandbox) {
             return 'https://openapi-sandbox.paykka.com';
         }
@@ -49,7 +49,7 @@ class PaykkaRequestHandler
      */
     public function getAppId($merchant_id = '')
     {
-        $sandbox = get_option('paykka_sandbox_flag') === 'yes';
+        $sandbox = get_option('paykka_sandbox_flag', 'no') === 'yes';
         $app_id = $sandbox ? get_option('paykka_sandbox_app_id', '') : get_option('paykka_app_id', '');
         if ($app_id === '' && $merchant_id !== '') {
             $app_id = $merchant_id;

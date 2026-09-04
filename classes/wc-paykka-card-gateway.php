@@ -484,7 +484,9 @@ class Paykka_Card_Gateway extends WC_Payment_Gateway
     private function format_session_response($order, $session_id)
     {
         $settings = getPaykkaSettings();
-        $env      = function_exists('paykka_is_sandbox') && paykka_is_sandbox() ? 'sandbox' : (get_option('paykka_api_region', 'eu') === 'hk' ? 'hk' : 'eu');
+        $env      = function_exists('paykka_is_sandbox') && paykka_is_sandbox()
+            ? 'sandbox'
+            : (function_exists('paykka_get_api_region') ? paykka_get_api_region() : 'eu');
         return array(
             'session_id'    => $session_id,
             'client_key'    => $settings['paykka_client_key'],

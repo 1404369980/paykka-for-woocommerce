@@ -201,6 +201,7 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
                         'title' => 'Sandbox',
                         'type' => 'checkbox',
                         'id' => 'paykka_sandbox_flag',
+                        'default' => 'no',
                         'desc_tip' => true,
                         'description' => __('Unchecked means production, checked means test. The environment can also be set in paykka-config.php (env) or with the PAYKKA_ENV constant in wp-config, both of which take precedence over this checkbox.', 'paykka-for-woocommerce'),
                     ],

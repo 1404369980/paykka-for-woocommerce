@@ -36,13 +36,13 @@ function paykka_diag_env_source()
     $config = function_exists('paykka_load_config') ? paykka_load_config() : array();
     if (!empty($config['env'])) {
         $env = strtolower((string) $config['env']);
-        if (in_array($env, array('production', 'prod', 'sandbox', 'test'), true)) {
+        if (in_array($env, array('eu', 'hk', 'sandbox'), true)) {
             return 'paykka-config.php';
         }
     }
     if (defined('PAYKKA_ENV')) {
         $env = strtolower((string) PAYKKA_ENV);
-        if (in_array($env, array('production', 'prod', 'sandbox', 'test'), true)) {
+        if (in_array($env, array('eu', 'hk', 'sandbox'), true)) {
             return 'PAYKKA_ENV';
         }
     }

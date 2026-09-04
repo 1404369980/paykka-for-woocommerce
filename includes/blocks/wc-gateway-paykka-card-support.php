@@ -76,9 +76,9 @@ final class WC_Gateway_Paykka_Card_Support extends AbstractPaymentMethodType
     public function get_payment_method_data()
     {
         $settings = function_exists('getPaykkaSettings') ? getPaykkaSettings() : array();
-        $env      = function_exists('paykka_is_sandbox') && paykka_is_sandbox()
+        $env = function_exists('paykka_is_sandbox') && paykka_is_sandbox()
             ? 'sandbox'
-            : (get_option('paykka_api_region', 'eu') === 'hk' ? 'hk' : 'eu');
+            : (function_exists('paykka_get_api_region') ? paykka_get_api_region() : 'eu');
         $checkout_url = function_exists('paykka_get_checkout_base_url') ? paykka_get_checkout_base_url() : '';
 
         // 标题以后台设置为准，仅在留空时回退到默认 Payments
