@@ -166,6 +166,9 @@ if (!defined('PAYKKA_CHECKOUT_BASE_SANDBOX')) {
 if (!defined('PAYKKA_CHECKOUT_BASE_PROD')) {
     define('PAYKKA_CHECKOUT_BASE_PROD', 'https://checkout.eu.paykka.com');
 }
+if (!defined('PAYKKA_CHECKOUT_BASE_HK_PROD')) {
+    define('PAYKKA_CHECKOUT_BASE_HK_PROD', 'https://checkout.aq.paykka.com');
+}
 
 /**
 /**
@@ -217,7 +220,10 @@ function paykka_get_checkout_base_url()
     if (!empty($config[$env_key]['checkout_base_url']) && is_string($config[$env_key]['checkout_base_url'])) {
         return rtrim($config[$env_key]['checkout_base_url'], '/');
     }
-    return $sandbox ? PAYKKA_CHECKOUT_BASE_SANDBOX : PAYKKA_CHECKOUT_BASE_PROD;
+    if ($sandbox) {
+        return PAYKKA_CHECKOUT_BASE_SANDBOX;
+    }
+    return paykka_get_api_region() === 'hk' ? PAYKKA_CHECKOUT_BASE_HK_PROD : PAYKKA_CHECKOUT_BASE_PROD;
 }
 
 /**
@@ -236,30 +242,6 @@ function getPaykkaSettings()
         'paykka_private_key' => get_option($prefix . 'private_key', ''),
         'paykka_merchant_id' => get_option($prefix . 'merchant_id', ''),
     );
-}
-
-/**
- * 一次性迁移：把 Payments 网关的历史默认标题 Credit Card 改为 Payments。
- *
- * 只执行一次，之后完全以商家在后台保存的标题为准（包括改回 Credit Card）。
- */
-function paykka_migrate_card_gateway_title()
-{
-    if (get_option('paykka_card_title_migrated', 'no') === 'yes') {
-        return;
-    }
-    // 先落标记，避免任何一次异常导致反复覆盖商家自定义标题
-    update_option('paykka_card_title_migrated', 'yes');
-
-    $settings = get_option('woocommerce_paykka-card_settings', array());
-    if (!is_array($settings) || !isset($settings['title'])) {
-        return;
-    }
-    if (trim((string) $settings['title']) !== 'Credit Card') {
-        return;
-    }
-    $settings['title'] = 'Payments';
-    update_option('woocommerce_paykka-card_settings', $settings);
 }
 
 /**
@@ -450,7 +432,7 @@ function paykka_attach_refund_link_on_order_refunded($order_id, $refund_id)
     if (!is_a($refund, 'WC_Order_Refund')) {
         return;
     }
-    if (!in_array($order->get_payment_method(), array('paykka', 'paykka-card'), true)) {
+    if ($order->get_payment_method() !== 'paykka') {
         return;
     }
     $key = paykka_refund_link_queue_meta_key();

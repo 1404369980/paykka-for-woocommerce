@@ -41,7 +41,6 @@ class PaykkaCallBackHandler
             WC()->cart->empty_cart();
         }
         if (WC()->session) {
-            WC()->session->__unset('paykka_card_checkout_order_id');
             WC()->session->__unset('paykka_checkout_order_id');
         }
     }
