@@ -3,7 +3,7 @@
  * @wordpress-plugin
  * Plugin Name:       PayKKa for WooCommerce
  * Plugin URI:        https://github.com/1404369980/paykka-for-woocommerce
- * Description:       PayKKa Hosted 收银台，支持 WooCommerce 结账与 Blocks。
+ * Description:       PayKKa Hosted 与 WeChat Pay（弹窗收银台），支持 WooCommerce 结账与 Blocks。
  * Version:           1.5.18
  * Author:            Fengqiao Yi
  * Author URI:        https://github.com/1404369980/paykka-for-woocommerce
@@ -70,11 +70,13 @@ function woocommerce_paykka_init()
     function woocommerce_paykka_add_gateway($methods)
     {
         $methods[] = 'Paykka_Credit_Card_Gateway';
+        $methods[] = 'Paykka_Wechat_Gateway';
         return $methods;
     }
     add_filter('woocommerce_payment_gateways', 'woocommerce_paykka_add_gateway');
 
     require_once $base . 'classes/wc-paykka-credit-card-gateway.php';
+    require_once $base . 'classes/wc-paykka-wechat-gateway.php';
     require_once $base . 'classes/admin/class-paykka-order-list.php';
     paykka_register_order_list_hooks();
 }
@@ -93,7 +95,7 @@ function paykka_flag_pay_for_order($order)
         return;
     }
     $method = isset($_POST['payment_method']) ? wc_clean(wp_unslash($_POST['payment_method'])) : '';
-    if ($method !== 'paykka') {
+    if (!in_array($method, array('paykka', 'paykka-wechat'), true)) {
         return;
     }
     $order->update_meta_data('_paykka_pay_for_order', 'yes');
@@ -106,10 +108,12 @@ function paykka_gateway_block_support()
     // 检查 WooCommerce Blocks 的 AbstractPaymentMethodType 类是否存在
     if (class_exists('Automattic\WooCommerce\Blocks\Payments\Integrations\AbstractPaymentMethodType')) {
         require_once plugin_dir_path(__FILE__) . 'includes/blocks/wc-gateway-paykka-support.php';
+        require_once plugin_dir_path(__FILE__) . 'includes/blocks/wc-gateway-paykka-wechat-support.php';
         add_action(
             'woocommerce_blocks_payment_method_type_registration',
             function (Automattic\WooCommerce\Blocks\Payments\PaymentMethodRegistry $payment_method_registry) {
                 $payment_method_registry->register(new WC_Gateway_Paykka_Support());
+                $payment_method_registry->register(new WC_Gateway_Paykka_Wechat_Support());
             }
         );
     }

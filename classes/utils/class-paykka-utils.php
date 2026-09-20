@@ -286,7 +286,7 @@ function paykka_new_trans_id($order)
  * Hosted / Card 每次真正 Create Session 前调用。
  *
  * @param \WC_Order $order
- * @param string    $channel hosted|card
+ * @param string    $channel hosted|card|wechat
  * @return string 新 trans_id；已支付订单返回空串
  */
 function paykka_begin_payment_attempt($order, $channel = 'hosted')
@@ -320,7 +320,8 @@ function paykka_begin_payment_attempt($order, $channel = 'hosted')
         $order->update_meta_data('_paykka_attempt_history', $history);
     }
 
-    $channel  = ($channel === 'card') ? 'card' : 'hosted';
+    $allowed_channels = array('hosted', 'card', 'wechat');
+    $channel          = in_array($channel, $allowed_channels, true) ? $channel : 'hosted';
     $trans_id = paykka_new_trans_id($order);
     $order->update_meta_data('_paykka_trans_id', $trans_id);
     $order->update_meta_data('_paykka_sub_method', $channel);
@@ -432,7 +433,7 @@ function paykka_attach_refund_link_on_order_refunded($order_id, $refund_id)
     if (!is_a($refund, 'WC_Order_Refund')) {
         return;
     }
-    if ($order->get_payment_method() !== 'paykka') {
+    if (!in_array($order->get_payment_method(), array('paykka', 'paykka-wechat'), true)) {
         return;
     }
     $key = paykka_refund_link_queue_meta_key();

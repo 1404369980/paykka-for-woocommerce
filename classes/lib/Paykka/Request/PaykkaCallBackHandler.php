@@ -75,7 +75,7 @@ class PaykkaCallBackHandler
 
         if ($order->get_status() === 'processing' || $order->get_status() === 'completed') {
             self::finishSuccess($order);
-            wp_safe_redirect($order->get_checkout_order_received_url());
+            self::redirectAfterPayment($order, $order->get_checkout_order_received_url(), true);
             exit;
         }
 
@@ -101,7 +101,7 @@ class PaykkaCallBackHandler
                 || ($order && in_array($order->get_status(), array('processing', 'completed', 'on-hold'), true))
             ) {
                 self::finishSuccess($order);
-                wp_safe_redirect($order->get_checkout_order_received_url());
+                self::redirectAfterPayment($order, $order->get_checkout_order_received_url(), true);
                 exit;
             }
 
@@ -115,7 +115,7 @@ class PaykkaCallBackHandler
                     wc_add_notice(__('Your payment is still being confirmed. Please refresh in a moment or contact support.', 'paykka-for-woocommerce'), 'notice');
                 }
             }
-            wp_safe_redirect(self::getRetryUrl($order));
+            self::redirectAfterPayment($order, self::getRetryUrl($order), false);
             exit;
         }
 
@@ -132,7 +132,45 @@ class PaykkaCallBackHandler
         if (function_exists('wc_add_notice')) {
             wc_add_notice(__('We cannot confirm the payment result right now. Please try again later or contact support.', 'paykka-for-woocommerce'), 'error');
         }
-        wp_safe_redirect(self::getRetryUrl($order));
+        self::redirectAfterPayment($order, self::getRetryUrl($order), false);
         exit;
+    }
+
+    /**
+     * WeChat 弹窗支付：在 popup 内回调时通知 opener 并关闭窗口；否则整页跳转。
+     *
+     * @param \WC_Order $order
+     * @param string    $url
+     * @param bool      $paid
+     */
+    private static function redirectAfterPayment($order, $url, $paid)
+    {
+        $is_wechat_popup = $order
+            && $order->get_payment_method() === 'paykka-wechat'
+            && $order->get_meta('_paykka_wechat_popup', true) === 'yes';
+
+        if (!$is_wechat_popup) {
+            wp_safe_redirect($url);
+            return;
+        }
+
+        $safe_url = esc_url_raw($url);
+        $payload  = wp_json_encode(array(
+            'source'    => 'paykka-wechat',
+            'type'      => $paid ? 'paid' : 'retry',
+            'returnUrl' => $safe_url,
+        ));
+
+        nocache_headers();
+        header('Content-Type: text/html; charset=utf-8');
+        echo '<!DOCTYPE html><html><head><meta charset="utf-8"><title>PayKKa</title></head><body>';
+        echo '<script>';
+        echo 'var payload = ' . $payload . ';';
+        echo 'try { if (window.opener && !window.opener.closed) { window.opener.postMessage(payload, "*"); } } catch (e) {}';
+        echo 'if (payload.type === "paid") { try { window.close(); } catch (e) {} setTimeout(function(){ window.location = payload.returnUrl; }, 300); }';
+        echo 'else { window.location = payload.returnUrl; }';
+        echo '</script>';
+        echo '<p><a href="' . esc_url($safe_url) . '">Continue</a></p>';
+        echo '</body></html>';
     }
 }

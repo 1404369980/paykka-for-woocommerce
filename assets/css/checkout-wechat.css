@@ -1,0 +1,43 @@
+.paykka-wechat-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 100000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(17, 24, 39, 0.55);
+}
+
+.paykka-wechat-overlay[hidden] {
+    display: none !important;
+}
+
+.paykka-wechat-overlay__panel {
+    max-width: 420px;
+    width: calc(100% - 2rem);
+    padding: 1.5rem 1.75rem;
+    border-radius: 8px;
+    background: #fff;
+    color: #111827;
+    text-align: center;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18);
+}
+
+.paykka-wechat-overlay__text {
+    margin: 0 0 1rem;
+    font-size: 1rem;
+    line-height: 1.5;
+}
+
+.paykka-wechat-waiting {
+    margin: 1.5rem 0;
+    padding: 1.25rem;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    text-align: center;
+    background: #f9fafb;
+}
+
+.paykka-wechat-waiting__text {
+    margin: 0 0 1rem;
+}

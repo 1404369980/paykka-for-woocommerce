@@ -297,6 +297,16 @@ class PaykkaRequestHandler
     }
 
     /**
+     * 创建微信支付收银台 Session。
+     * session_mode=HOSTED + allowed_payment_methods=["WechatPayGlobal"]
+     * 见 https://docs.paykka.com/zh-hans/payments/docs/payment-method/wechat-pay/wechat-pay
+     */
+    public function buildWechatSession($order)
+    {
+        return $this->handlerSession($order, 'HOSTED', array('WechatPayGlobal'));
+    }
+
+    /**
      * 创建结账页内嵌 Card / Drop-in 用的 Session。
      * 接口: POST /v3/payment/acq/session
      * Card 组件推荐 session_mode=COMPONENT；Drop-in 使用 DROP_IN。见 PayKKa Component Web 文档。
@@ -307,10 +317,14 @@ class PaykkaRequestHandler
     }
 
     /**
-     * 创建收银台 Session（Hosted / DROP_IN）
+     * 创建收银台 Session（Hosted / DROP_IN / COMPONENT）
      * 接口: POST /v3/payment/acq/session
+     *
+     * @param \WC_Order  $order
+     * @param string     $session_mode
+     * @param array|null $allowed_payment_methods 如 WechatPayGlobal；null 表示不限制
      */
-    public function handlerSession($order, $session_mode)
+    public function handlerSession($order, $session_mode, $allowed_payment_methods = null)
     {
         $paykkaSettings = getPaykkaSettings();
         $merchant_id = $paykkaSettings['paykka_merchant_id'];
@@ -357,10 +371,13 @@ class PaykkaRequestHandler
             if (is_string($merchant_name) && $merchant_name !== '') {
                 $paymentRequest->__set('display_merchant_name', $merchant_name);
             }
-            $allowed = apply_filters('paykka_component_allowed_payment_methods', null, $order);
-            if (is_array($allowed) && !empty($allowed)) {
-                $paymentRequest->__set('allowed_payment_methods', array_values($allowed));
+            if ($allowed_payment_methods === null) {
+                $allowed_payment_methods = apply_filters('paykka_component_allowed_payment_methods', null, $order);
             }
+        }
+
+        if (is_array($allowed_payment_methods) && !empty($allowed_payment_methods)) {
+            $paymentRequest->__set('allowed_payment_methods', array_values($allowed_payment_methods));
         }
 
         $paymentRequest->bill = $this->buildBill($order);
