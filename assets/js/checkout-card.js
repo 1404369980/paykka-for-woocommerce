@@ -11,6 +11,7 @@
     var lastSignature = '';
     var cardReady = false;
     var paying = false;
+    var boundOrderId = 0;
 
     function selectedCard() {
         return $('form.checkout input[name="payment_method"]:checked').val() === gatewayId;
@@ -73,6 +74,55 @@
         });
     }
 
+    /**
+     * 支付前绑定 pending WC 订单（对齐 WC/PayPal/Stripe）。
+     */
+    function bindPendingOrder() {
+        var url = config.noteAjaxUrl;
+        if (!url) {
+            return Promise.reject(new Error(
+                (config.i18n && config.i18n.orderBindFailed) || 'Could not create order'
+            ));
+        }
+        var $form = $('form.checkout');
+        return $.ajax({
+            url: url,
+            type: 'POST',
+            dataType: 'json',
+            data: {
+                security: config.nonce,
+                post_data: $form.serialize(),
+                payment_method: gatewayId
+            }
+        }).then(function (response) {
+            if (!response || !response.success || !response.data || !response.data.order_id) {
+                var msg =
+                    (response && response.data && response.data.message) ||
+                    (config.i18n && config.i18n.orderBindFailed) ||
+                    'Could not create order';
+                return $.Deferred().reject(new Error(msg)).promise();
+            }
+            boundOrderId = Number(response.data.order_id) || 0;
+            return response.data;
+        });
+    }
+
+    function markPaymentFailed(text) {
+        var url = config.failAjaxUrl;
+        if (!url) {
+            return;
+        }
+        $.ajax({
+            url: url,
+            type: 'POST',
+            dataType: 'json',
+            data: {
+                security: config.nonce,
+                message: String(text || '').slice(0, 500)
+            }
+        });
+    }
+
     function triggerPayment() {
         if (!cardInstance || !cardInstance.ref || typeof cardInstance.ref.payment !== 'function') {
             return false;
@@ -84,7 +134,9 @@
             return true;
         } catch (err) {
             paying = false;
-            message('error', (err && err.message) || config.i18n.error);
+            var text = (err && err.message) || config.i18n.error;
+            message('error', text);
+            markPaymentFailed(text);
             return false;
         }
     }
@@ -94,6 +146,9 @@
             throw new Error('Invalid PayKKa session response');
         }
         destroyCard();
+        if (data.order_id) {
+            boundOrderId = Number(data.order_id) || boundOrderId;
+        }
         var sdk = window.PayKKaCardCheckoutUI;
         if (!sdk || !sdk.PayKKaCheckout || !sdk.Card) {
             throw new Error('PayKKa Card SDK is unavailable');
@@ -132,6 +187,7 @@
                     paying = false;
                     cardReady = false;
                     message('error', config.i18n.error);
+                    markPaymentFailed(config.i18n.error);
                 },
                 onError: function (error) {
                     paying = false;
@@ -154,6 +210,7 @@
                         }
                     }
                     message('error', text);
+                    markPaymentFailed(text);
                     if (typeof window.jQuery !== 'undefined') {
                         $(document.body).trigger('checkout_error');
                     }
@@ -240,7 +297,7 @@
             }
         });
 
-        // Airwallex 风格：点击「下单」触发 Card 支付，不走 WC 再下一单。
+        // 对齐同行：先绑定 WC 订单，再触发 Card 支付；不走 WC 二次 process_payment。
         $(document.body).on('checkout_place_order_' + gatewayId, function () {
             if (paying) {
                 return false;
@@ -249,10 +306,29 @@
                 message('error', config.i18n.notReady);
                 return false;
             }
-            if (!triggerPayment()) {
-                message('error', config.i18n.notReady);
-                return false;
-            }
+
+            paying = true;
+            message('ready', config.i18n.paying);
+            bindPendingOrder()
+                .then(function () {
+                    if (!triggerPayment()) {
+                        paying = false;
+                        message('error', config.i18n.notReady);
+                    }
+                })
+                .catch(function (err) {
+                    paying = false;
+                    message(
+                        'error',
+                        (err && err.message) ||
+                            (config.i18n && config.i18n.orderBindFailed) ||
+                            config.i18n.error
+                    );
+                    if (typeof window.jQuery !== 'undefined') {
+                        $(document.body).trigger('checkout_error');
+                    }
+                });
+
             return false;
         });
 

@@ -9,7 +9,7 @@
 class Paykka_Card_Gateway extends WC_Payment_Gateway
 {
     /** @var string */
-    public $version = '1.5.28';
+    public $version = '1.5.33';
 
     /** @var Paykka_Card_Checkout_Service|null */
     private $checkout_service;
@@ -123,6 +123,31 @@ class Paykka_Card_Gateway extends WC_Payment_Gateway
     }
 
     /**
+     * 收银台支付失败：把已绑定 WC 订单标为 failed。
+     */
+    public function ajax_mark_payment_failed()
+    {
+        if (!$this->verify_ajax_nonce()) {
+            return;
+        }
+
+        $message = '';
+        if (isset($_POST['message'])) {
+            $message = sanitize_text_field(wp_unslash((string) $_POST['message']));
+        }
+
+        $order = $this->checkout_service()->mark_payment_failed($message);
+        if (is_wp_error($order)) {
+            wp_send_json_error(array('message' => $order->get_error_message()), 400);
+        }
+
+        wp_send_json_success(array(
+            'order_id' => (int) $order->get_id(),
+            'status'   => $order->get_status(),
+        ));
+    }
+
+    /**
      * @param string|array $posted_data
      * @return array|\WP_Error
      */
@@ -141,7 +166,20 @@ class Paykka_Card_Gateway extends WC_Payment_Gateway
         $this->sync_checkout_customer($data);
         $force_new = !empty($data['force_new']) || !empty($_POST['force_new']);
 
-        return $this->checkout_service()->create_component_session($force_new);
+        $service = $this->checkout_service();
+        $result  = $service->create_component_session($force_new);
+        if (is_wp_error($result)) {
+            return $result;
+        }
+
+        // 对齐同行：Session 就绪后立即绑定 pending WC 订单，保证支付前/失败后都有单可查。
+        $order = $service->bind_pending_order($data);
+        if (is_wp_error($order)) {
+            return $order;
+        }
+        $result['order_id'] = (int) $order->get_id();
+
+        return $result;
     }
 
     public function process_payment($order_id)

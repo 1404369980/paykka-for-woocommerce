@@ -99,7 +99,8 @@ class Paykka_Card_Checkout_Service
     }
 
     /**
-     * 选中 Payments：Create COMPONENT Session（不建 WC 订单）。
+     * 选中 Payments：Create COMPONENT Session。
+     * WC 订单由网关在 Session 成功后立刻 bind_pending_order（支付前必有单）。
      *
      * @param bool $force_new
      * @return array|\WP_Error
@@ -166,6 +167,7 @@ class Paykka_Card_Checkout_Service
 
     /**
      * 下单：创建/复用 pending 订单并绑定 Card session。
+     * 对齐 WC / PayPal / Stripe：支付发起前必须已有 WC 订单。
      *
      * @param array $checkout_data
      * @return \WC_Order|\WP_Error
@@ -188,6 +190,55 @@ class Paykka_Card_Checkout_Service
         $cart_hash = WC()->cart->get_cart_hash();
 
         return $this->get_or_create_pending_order($checkout_data, $cart_hash, $card_session);
+    }
+
+    /**
+     * 收银台支付失败：将已绑定的 pending 订单标为 failed（不覆盖已成功状态）。
+     *
+     * @param string $message
+     * @return \WC_Order|\WP_Error
+     */
+    public function mark_payment_failed($message = '')
+    {
+        if (!function_exists('WC') || !WC()->session) {
+            return new \WP_Error('paykka_session', __('Session unavailable', 'paykka-for-woocommerce'));
+        }
+
+        $order_id = absint(WC()->session->get(self::ORDER_SESSION_KEY));
+        if (!$order_id) {
+            $cache = $this->get_session_cache();
+            if (!empty($cache['attempt_id'])) {
+                $order_id = self::resolve_order_id_by_attempt((string) $cache['attempt_id']);
+            }
+        }
+
+        $order = $order_id ? wc_get_order($order_id) : null;
+        if (!$order || !$order->get_id()) {
+            return new \WP_Error('paykka_order_missing', __('No WooCommerce order bound for this payment.', 'paykka-for-woocommerce'));
+        }
+        if ($order->get_payment_method() !== self::GATEWAY_ID) {
+            return new \WP_Error('paykka_wrong_method', __('Invalid payment method for order.', 'paykka-for-woocommerce'));
+        }
+        if ($order->has_status(array('processing', 'completed', 'refunded'))) {
+            return $order;
+        }
+
+        $note = is_string($message) ? trim(wp_strip_all_tags($message)) : '';
+        if ($note === '') {
+            $note = __('PayKKa payment failed at checkout.', 'paykka-for-woocommerce');
+        }
+        if (strlen($note) > 500) {
+            $note = substr($note, 0, 500);
+        }
+
+        if (!$order->has_status('failed')) {
+            $order->update_status('failed', $note);
+        } else {
+            $order->add_order_note($note);
+            $order->save();
+        }
+
+        return $order;
     }
 
     /**
@@ -449,9 +500,16 @@ class Paykka_Card_Checkout_Service
             }
         } else {
             $order->remove_order_items();
+            // 失败后重试：把 failed 拉回 pending，再发起支付
+            if ($order->has_status('failed')) {
+                $order->set_status('pending');
+            }
         }
 
         $this->populate_order($order, $data, $cart_hash);
+        if (!$order->has_status('pending')) {
+            $order->set_status('pending');
+        }
         $order->update_meta_data('_paykka_checkout_order', 'yes');
         $order->update_meta_data('_paykka_sub_method', self::CHANNEL);
         $order->update_meta_data('_paykka_attempt_id', $attempt_id);

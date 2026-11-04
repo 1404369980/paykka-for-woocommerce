@@ -30,6 +30,7 @@
         readyMethods: [],
         parking: null,
         payResolver: null,
+        payTimer: null,
         skipSubmitNote: false,
     };
 
@@ -51,6 +52,11 @@
         if (!instance || typeof instance.mount !== 'function' || !container) {
             return false;
         }
+        // 已挂在同一容器：禁止 unmount/remount。
+        // 否则点「下单」时 attachAll 会刷新卡组件（Activated 重触发、已填卡号丢失、支付 iframe 中断）。
+        if (instance.__paykkaMountEl === container) {
+            return true;
+        }
         try {
             if (typeof instance.unmount === 'function') {
                 instance.unmount();
@@ -60,6 +66,7 @@
         }
         try {
             instance.mount(container);
+            instance.__paykkaMountEl = container;
             return true;
         } catch (e) {
             return false;
@@ -72,18 +79,7 @@
             if (!inst) {
                 return;
             }
-            try {
-                if (typeof inst.unmount === 'function') {
-                    inst.unmount();
-                }
-            } catch (e) {
-                // ignore
-            }
-            try {
-                inst.mount(parking);
-            } catch (e) {
-                // ignore
-            }
+            mountComponent(inst, parking);
         });
     }
 
@@ -118,6 +114,15 @@
         } catch (e) {
             // ignore
         }
+        [cardCache.applePay, cardCache.googlePay, cardCache.card].forEach(function (inst) {
+            if (inst) {
+                try {
+                    delete inst.__paykkaMountEl;
+                } catch (e) {
+                    // ignore
+                }
+            }
+        });
         cardCache.signature = '';
         cardCache.sessionData = null;
         cardCache.checkout = null;
@@ -126,6 +131,10 @@
         cardCache.googlePay = null;
         cardCache.readyMethods = [];
         cardCache.payResolver = null;
+        if (cardCache.payTimer) {
+            clearTimeout(cardCache.payTimer);
+            cardCache.payTimer = null;
+        }
         cardCache.skipSubmitNote = false;
         if (cardCache.parking && cardCache.parking.parentNode) {
             cardCache.parking.innerHTML = '';
@@ -155,10 +164,17 @@
         return codes.indexOf(target) !== -1;
     }
 
+    /**
+     * 支付前绑定/刷新 pending WC 订单（对齐 Stripe/PayPal：先有订单再收款）。
+     * @returns {Promise<{ok:boolean, order_id?:number, message?:string}>}
+     */
     function notePlaceOrder(billing, shippingData) {
         const url = settings.noteAjaxUrl;
         if (!url) {
-            return Promise.resolve(false);
+            return Promise.resolve({
+                ok: false,
+                message: i18n.orderBindFailed || 'Could not create order',
+            });
         }
         const body = new URLSearchParams();
         body.set('security', settings.nonce || '');
@@ -173,17 +189,62 @@
         })
             .then(function (response) {
                 return response.text().then(function (raw) {
+                    let json = null;
                     try {
-                        const json = raw ? JSON.parse(raw) : null;
-                        return !!(json && json.success);
+                        json = raw ? JSON.parse(raw) : null;
                     } catch (e) {
-                        return false;
+                        return {
+                            ok: false,
+                            message: i18n.orderBindFailed || 'Could not create order',
+                        };
                     }
+                    if (json && json.success && json.data && json.data.order_id) {
+                        return {
+                            ok: true,
+                            order_id: Number(json.data.order_id) || 0,
+                            attempt_id: json.data.attempt_id || '',
+                        };
+                    }
+                    return {
+                        ok: false,
+                        message:
+                            (json && json.data && json.data.message) ||
+                            i18n.orderBindFailed ||
+                            'Could not create order',
+                    };
                 });
             })
             .catch(function () {
-                return false;
+                return {
+                    ok: false,
+                    message: i18n.orderBindFailed || 'Could not create order',
+                };
             });
+    }
+
+    /**
+     * 收银台支付失败 → 将已绑定 WC 订单标为 failed。
+     */
+    function markPaymentFailed(message) {
+        const url = settings.failAjaxUrl;
+        if (!url) {
+            return Promise.resolve();
+        }
+        const body = new URLSearchParams();
+        body.set('security', settings.nonce || '');
+        if (message) {
+            body.set('message', String(message).slice(0, 500));
+        }
+        return fetch(url, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+            },
+            body: body.toString(),
+        }).catch(function () {
+            // 失败标记为最佳努力，不阻断前端错误展示
+        });
     }
 
     function mapBlocksAddress(prefix, address) {
@@ -568,10 +629,23 @@
 
             destroyCachedCard();
 
+            // 与 classic checkout-card.js 一致：必须带 _envConfig，
+            // 否则支付 hidden iframe 可能落在商户域，postMessage 目标源不匹配导致一直转圈。
+            const checkoutBase =
+                (data && data.checkout_base) || settings.checkoutBase || '';
+            const envConfig = checkoutBase
+                ? {
+                      api: checkoutBase.replace(/\/$/, ''),
+                      cdn: checkoutBase.replace(/\/$/, '') + '/cp',
+                  }
+                : undefined;
+
             const checkout = new sdk.PayKKaCheckout({
                 sessionId: data.session_id,
                 clientKey: data.client_key || settings.clientKey,
                 env: data.env || settings.env || 'sandbox',
+                returnUrl: data.return_url || '',
+                _envConfig: envConfig,
                 // 卡支付走 WC 下单按钮；钱包按钮由 Apple/Google 组件自身展示
                 hidePaymentButton: true,
                 // 支付时补齐 trans_amount / bill；（有收货时再带 shipping）
@@ -602,20 +676,39 @@
                         setError(message);
                         setStatus(i18n.ready || 'Ready');
                         if (cardCache.payResolver) {
-                            cardCache.payResolver({ ok: false, message: message });
+                            // 仅表单校验失败，不改 WC 订单状态
+                            cardCache.payResolver({
+                                ok: false,
+                                message: message,
+                                markFailed: false,
+                            });
                             cardCache.payResolver = null;
                         }
                         return;
                     }
-                    // WC「下单」触发的 payment() 已写过备注，避免重复
+                    // WC「下单」触发的 payment() 已绑定订单，避免重复
                     if (cardCache.skipSubmitNote) {
                         cardCache.skipSubmitNote = false;
                         return;
                     }
-                    // Apple Pay / Google Pay 按钮提交：同步最新地址到 WC 订单
-                    notePlaceOrder(billingRef.current, shippingRef.current);
+                    // Apple Pay / Google Pay：Session 创建时已建单；这里只刷新地址。
+                    // 绑定失败不标 failed（支付可能仍在进行，避免与成功 webhook 竞态）。
+                    notePlaceOrder(billingRef.current, shippingRef.current).then(function (bindResult) {
+                        if (!bindResult || !bindResult.ok) {
+                            setError(
+                                (bindResult && bindResult.message) ||
+                                    i18n.orderBindFailed ||
+                                    'Could not create order'
+                            );
+                        }
+                    });
                 },
                 onSuccess: function (payload) {
+                    // 成功跳转前清掉 WC 等待定时器，避免 60s 后误标 failed
+                    if (cardCache.payTimer) {
+                        clearTimeout(cardCache.payTimer);
+                        cardCache.payTimer = null;
+                    }
                     cardCache.payResolver = null;
                     const returnUrl =
                         (payload && payload.returnUrl) ||
@@ -632,13 +725,16 @@
                         requestFreshSession({ forceNew: true });
                         return;
                     }
+                    const expiredMsg = i18n.error || 'Session expired';
                     setReady(false);
-                    setError(i18n.error || 'Session expired');
+                    setError(expiredMsg);
                     setStatus('');
+                    // Session 过期：订单保持 pending，便于换新 Session 重试；不标 failed
                     if (cardCache.payResolver) {
                         cardCache.payResolver({
                             ok: false,
-                            message: i18n.error || 'Session expired',
+                            message: expiredMsg,
+                            markFailed: false,
                         });
                         cardCache.payResolver = null;
                     }
@@ -647,17 +743,28 @@
                     const message = formatPaykkaError(err, i18n.error || 'Payment failed');
                     setError(message);
                     setStatus(i18n.ready || 'Ready');
+                    // 仅 SDK 明确支付失败时标 failed
+                    markPaymentFailed(message);
                     if (cardCache.payResolver) {
-                        cardCache.payResolver({ ok: false, message: message });
+                        cardCache.payResolver({
+                            ok: false,
+                            message: message,
+                            markFailed: false,
+                        });
                         cardCache.payResolver = null;
                     }
                 },
                 onTimeout: function () {
-                    const message = i18n.error || 'Payment timeout';
+                    const message = i18n.payTimeout || i18n.error || 'Payment timeout';
                     setError(message);
                     setStatus(i18n.ready || 'Ready');
+                    markPaymentFailed(message);
                     if (cardCache.payResolver) {
-                        cardCache.payResolver({ ok: false, message: message });
+                        cardCache.payResolver({
+                            ok: false,
+                            message: message,
+                            markFailed: false,
+                        });
                         cardCache.payResolver = null;
                     }
                 },
@@ -701,7 +808,11 @@
                         setError(message);
                         setStatus(i18n.ready || 'Ready');
                         if (cardCache.payResolver) {
-                            cardCache.payResolver({ ok: false, message: message });
+                            cardCache.payResolver({
+                                ok: false,
+                                message: message,
+                                markFailed: false,
+                            });
                             cardCache.payResolver = null;
                         }
                     }
@@ -898,8 +1009,12 @@
                         };
                     }
 
-                    // 下单瞬间再尝试挂回一次，避免切支付方式后仍停在 parking
-                    if (mountRef.current) {
+                    // 仅当组件还在 parking 时才挂回；已在可见容器则绝不 remount
+                    if (
+                        mountRef.current &&
+                        cardCache.card &&
+                        cardCache.card.__paykkaMountEl !== mountRef.current
+                    ) {
                         attachAll(appleRef.current, googleRef.current, mountRef.current);
                     }
 
@@ -919,6 +1034,13 @@
                     setError('');
                     cardCache.skipSubmitNote = true;
 
+                    // Create Session 时已建 pending 单。点击下单必须尽快调 payment()，
+                    // 不能先 await 绑单 AJAX（会打断原时序，出现 hidden iframe postMessage
+                    // 卡死、一直转圈）。绑单只在后台刷新地址。
+                    const hasBoundOrder = !!(
+                        cardCache.sessionData && Number(cardCache.sessionData.order_id) > 0
+                    );
+
                     return new Promise(function (resolve) {
                         let settled = false;
                         const finish = function (result) {
@@ -927,32 +1049,30 @@
                             }
                             settled = true;
                             cardCache.payResolver = null;
-                            clearTimeout(timer);
+                            if (cardCache.payTimer) {
+                                clearTimeout(cardCache.payTimer);
+                                cardCache.payTimer = null;
+                            }
                             if (!result || result.ok === false) {
                                 cardCache.skipSubmitNote = false;
                                 setStatus('');
+                                const failMsg =
+                                    (result && result.message) ||
+                                    i18n.needCard ||
+                                    i18n.error ||
+                                    'Payment failed';
+                                if (result && result.markFailed === true) {
+                                    markPaymentFailed(failMsg);
+                                }
                                 resolve({
                                     type: emitResponse.responseTypes.ERROR,
-                                    message:
-                                        (result && result.message) ||
-                                        i18n.needCard ||
-                                        i18n.error ||
-                                        'Payment failed',
+                                    message: failMsg,
                                     messageContext: emitResponse.noticeContexts.PAYMENTS,
                                 });
-                                return;
                             }
                         };
 
-                        cardCache.payResolver = finish;
-                        const timer = setTimeout(function () {
-                            finish({
-                                ok: false,
-                                message: i18n.needCard || i18n.error || 'Payment timeout',
-                            });
-                        }, 60000);
-
-                        notePlaceOrder(billingRef.current, shippingRef.current).finally(function () {
+                        const startPay = function () {
                             try {
                                 const maybe = cardCache.card.ref.payment();
                                 if (maybe && typeof maybe.then === 'function') {
@@ -960,16 +1080,64 @@
                                         finish({
                                             ok: false,
                                             message:
-                                                (err && err.message) || i18n.needCard || i18n.error,
+                                                (err && err.message) ||
+                                                i18n.needCard ||
+                                                i18n.error,
+                                            markFailed: false,
                                         });
                                     });
                                 }
                             } catch (err) {
                                 finish({
                                     ok: false,
-                                    message: (err && err.message) || i18n.needCard || i18n.error,
+                                    message:
+                                        (err && err.message) || i18n.needCard || i18n.error,
+                                    markFailed: false,
                                 });
                             }
+                        };
+
+                        cardCache.payResolver = finish;
+                        if (cardCache.payTimer) {
+                            clearTimeout(cardCache.payTimer);
+                        }
+                        cardCache.payTimer = setTimeout(function () {
+                            finish({
+                                ok: false,
+                                message:
+                                    i18n.payTimeout ||
+                                    i18n.error ||
+                                    'Payment is taking longer than expected. Please wait or retry.',
+                                markFailed: false,
+                            });
+                        }, 120000);
+
+                        if (hasBoundOrder) {
+                            // 与改前一致：不阻塞，立刻 payment；后台刷新订单地址
+                            notePlaceOrder(billingRef.current, shippingRef.current);
+                            startPay();
+                            return;
+                        }
+
+                        // 极端兜底：Session 响应里还没有 order_id 时，先绑单再付
+                        notePlaceOrder(billingRef.current, shippingRef.current).then(function (
+                            bindResult
+                        ) {
+                            if (!bindResult || !bindResult.ok) {
+                                finish({
+                                    ok: false,
+                                    message:
+                                        (bindResult && bindResult.message) ||
+                                        i18n.orderBindFailed ||
+                                        'Could not create order',
+                                    markFailed: false,
+                                });
+                                return;
+                            }
+                            if (bindResult.order_id && cardCache.sessionData) {
+                                cardCache.sessionData.order_id = bindResult.order_id;
+                            }
+                            startPay();
                         });
                     });
                 });
