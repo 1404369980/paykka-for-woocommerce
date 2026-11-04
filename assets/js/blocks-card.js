@@ -1,7 +1,7 @@
 (() => {
     'use strict';
 
-    const { createElement, useEffect, useRef, useState, useCallback } = window.wp.element;
+    const { createElement, useEffect, useLayoutEffect, useRef, useState, useCallback } = window.wp.element;
     const { __ } = window.wp.i18n;
     const { decodeEntities } = window.wp.htmlEntities;
     const { registerPaymentMethod } = window.wc.wcBlocksRegistry;
@@ -555,7 +555,7 @@
             }
             setReady(true);
             setError('');
-            setStatus(i18n.ready || 'Ready');
+            setStatus('');
             return true;
         }, []);
 
@@ -709,6 +709,7 @@
             };
 
             const card = checkout.create(sdk.Card, cardOpts);
+            // 优先挂到可见容器；ref 尚未就绪时先挂 parking，随后由 useLayoutEffect 拉回
             card.mount(mountRef.current || parking);
 
             cardCache.checkout = checkout;
@@ -717,12 +718,11 @@
             cardCache.signature = sig;
             retryNewSessionRef.current = false;
 
-            if (mountRef.current || appleRef.current || googleRef.current) {
-                attachAll(appleRef.current, googleRef.current, mountRef.current);
-                setReady(true);
-                setError('');
-                setStatus(i18n.ready || 'Ready');
-            }
+            const attached = attachAll(appleRef.current, googleRef.current, mountRef.current);
+            setReady(true);
+            setError('');
+            // 表单已就绪时不展示 “Ready”，对齐 WC / Stripe：直接露出输入框
+            setStatus(attached || mountRef.current ? '' : i18n.loading || 'Loading…');
         }, []);
 
         const requestSession = useCallback(
@@ -739,15 +739,7 @@
                     return;
                 }
 
-                const checkoutBlocker = getCheckoutValidationBlocker();
-                if (checkoutBlocker) {
-                    destroyCachedCard();
-                    setReady(false);
-                    setStatus('');
-                    setError(checkoutBlocker);
-                    return;
-                }
-
+                // 字段校验仅在下单时拦截；填表过程中不销毁支付组件（否则输入框偶发空白）
                 if (!forceNew && restoreCached(sig)) {
                     return;
                 }
@@ -831,10 +823,32 @@
         );
 
         const sig = sessionSignature(billing, shippingData);
+        const isSelected = activePaymentMethod === gatewayId;
+
+        // 选中后立刻把 parking 中的组件挂回可见节点（比 useEffect 更早，减少空白闪烁）
+        useLayoutEffect(
+            function () {
+                if (!isSelected) {
+                    return undefined;
+                }
+                if (
+                    cardCache.signature === sig &&
+                    (cardCache.card || cardCache.applePay || cardCache.googlePay)
+                ) {
+                    if (attachAll(appleRef.current, googleRef.current, mountRef.current)) {
+                        setReady(true);
+                        setError('');
+                        setStatus('');
+                    }
+                }
+                return undefined;
+            },
+            [isSelected, sig, ready]
+        );
 
         useEffect(
             function () {
-                if (activePaymentMethod !== gatewayId) {
+                if (!isSelected) {
                     parkAll();
                     return undefined;
                 }
@@ -845,12 +859,12 @@
 
                 const timer = setTimeout(function () {
                     requestSession({ forceNew: false });
-                }, 300);
+                }, 200);
                 return function () {
                     clearTimeout(timer);
                 };
             },
-            [sig, activePaymentMethod, requestSession, restoreCached]
+            [sig, isSelected, requestSession, restoreCached]
         );
 
         useEffect(function () {
@@ -884,8 +898,12 @@
                         };
                     }
 
+                    // 下单瞬间再尝试挂回一次，避免切支付方式后仍停在 parking
+                    if (mountRef.current) {
+                        attachAll(appleRef.current, googleRef.current, mountRef.current);
+                    }
+
                     if (
-                        !ready ||
                         !cardCache.card ||
                         !cardCache.card.ref ||
                         typeof cardCache.card.ref.payment !== 'function'
@@ -912,7 +930,7 @@
                             clearTimeout(timer);
                             if (!result || result.ok === false) {
                                 cardCache.skipSubmitNote = false;
-                                setStatus(i18n.ready || 'Ready');
+                                setStatus('');
                                 resolve({
                                     type: emitResponse.responseTypes.ERROR,
                                     message:
@@ -960,9 +978,16 @@
             [onPaymentSetup, emitResponse, ready]
         );
 
+        // 对齐 WC：选中后始终渲染非空内容区，避免 accordion `:empty` 把整块隐藏
+        const showStatus = !!(status && (!ready || status === (i18n.paying || 'Paying…') || status === (i18n.needBilling || 'Need billing') || status === (i18n.loading || 'Loading…')));
+
         return createElement(
             'div',
-            { className: 'paykka-checkout-fields paykka-blocks-card' },
+            {
+                className:
+                    'paykka-checkout-fields paykka-blocks-card' +
+                    (ready ? ' is-ready' : ' is-loading'),
+            },
             createElement('div', {
                 id: 'paykka-checkout-apple-pay',
                 className: 'paykka-wallet-container paykka-apple-pay-container',
@@ -973,7 +998,7 @@
                 className: 'paykka-wallet-container paykka-google-pay-container',
                 ref: googleRef,
             }),
-            status
+            showStatus
                 ? createElement(
                       'p',
                       { className: 'paykka-card-status', role: 'status', 'aria-live': 'polite' },
@@ -984,6 +1009,8 @@
                 id: 'paykka-checkout-card',
                 className: 'paykka-card-container',
                 ref: mountRef,
+                // 占位，保证父级不是 :empty，WC accordion 不会 display:none
+                'data-paykka-card': '1',
             }),
             error
                 ? createElement('p', { className: 'paykka-card-error', role: 'alert' }, error)

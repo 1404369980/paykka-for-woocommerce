@@ -9,7 +9,7 @@
 class Paykka_Card_Gateway extends WC_Payment_Gateway
 {
     /** @var string */
-    public $version = '1.5.27';
+    public $version = '1.5.28';
 
     /** @var Paykka_Card_Checkout_Service|null */
     private $checkout_service;

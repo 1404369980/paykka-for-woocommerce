@@ -1,9 +1,14 @@
+/* 对齐 WC Blocks 付款选项 accordion 内容区，避免空内容被 :empty 规则整块隐藏 */
+.wc-block-components-radio-control-accordion-content .paykka-checkout-fields,
 .paykka-checkout-fields {
-    margin: 0.75em 0 0;
+    margin: 0;
+    min-height: 48px;
+    width: 100%;
 }
 
 .paykka-wallet-container {
     margin: 0 0 0.65em;
+    min-height: 0;
 }
 
 .paykka-wallet-container:empty {
@@ -11,8 +16,21 @@
 }
 
 .paykka-card-container {
-    min-height: 72px;
-    margin: 0.5em 0;
+    position: relative;
+    min-height: 120px;
+    margin: 0.25em 0 0;
+    width: 100%;
+}
+
+/* SDK iframe / 内部表单必须可见 */
+.paykka-card-container iframe,
+.paykka-wallet-container iframe {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100%;
+    border: 0;
+    visibility: visible !important;
+    opacity: 1 !important;
 }
 
 .paykka-card-status,
