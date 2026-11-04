@@ -99,8 +99,8 @@ class Paykka_Card_Checkout_Service
     }
 
     /**
-     * 选中 Payments：Create COMPONENT Session。
-     * WC 订单由网关在 Session 成功后立刻 bind_pending_order（支付前必有单）。
+     * 选中 Payments：Create COMPONENT Session（不建 WC 订单）。
+     * WC 订单仅在顾客点击「下单」时由 bind_pending_order 创建。
      *
      * @param bool $force_new
      * @return array|\WP_Error

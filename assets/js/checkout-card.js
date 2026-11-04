@@ -238,10 +238,6 @@
                 fields[decodeURIComponent(pair[0].replace(/\+/g, ' '))] = pair[1] || '';
             }
         });
-        if (!fields.billing_email || !fields.billing_country) {
-            message('ready', config.i18n.needBilling);
-            return;
-        }
         if (signature === lastSignature && cardInstance && cardReady) {
             return;
         }

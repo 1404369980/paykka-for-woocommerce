@@ -9,7 +9,7 @@
 class Paykka_Card_Gateway extends WC_Payment_Gateway
 {
     /** @var string */
-    public $version = '1.5.33';
+    public $version = '1.5.35';
 
     /** @var Paykka_Card_Checkout_Service|null */
     private $checkout_service;
@@ -158,28 +158,11 @@ class Paykka_Card_Gateway extends WC_Payment_Gateway
             return new \WP_Error('paykka_wrong_method', __('请选择 Payments 后再继续。', 'paykka-for-woocommerce'));
         }
 
-        $billing_error = $this->validate_billing_for_session($data);
-        if (is_wp_error($billing_error)) {
-            return $billing_error;
-        }
-
+        // Create Session 只开 PayKKa 组件会话，不创建 WC 订单；点「下单」再 bind_pending_order。
         $this->sync_checkout_customer($data);
         $force_new = !empty($data['force_new']) || !empty($_POST['force_new']);
 
-        $service = $this->checkout_service();
-        $result  = $service->create_component_session($force_new);
-        if (is_wp_error($result)) {
-            return $result;
-        }
-
-        // 对齐同行：Session 就绪后立即绑定 pending WC 订单，保证支付前/失败后都有单可查。
-        $order = $service->bind_pending_order($data);
-        if (is_wp_error($order)) {
-            return $order;
-        }
-        $result['order_id'] = (int) $order->get_id();
-
-        return $result;
+        return $this->checkout_service()->create_component_session($force_new);
     }
 
     public function process_payment($order_id)
@@ -274,32 +257,6 @@ class Paykka_Card_Gateway extends WC_Payment_Gateway
             parse_str(wp_unslash($posted_data), $posted_data);
         }
         return is_array($posted_data) ? wc_clean($posted_data) : array();
-    }
-
-    /**
-     * @param array $data
-     * @return true|\WP_Error
-     */
-    private function validate_billing_for_session($data)
-    {
-        $email    = isset($data['billing_email']) ? trim((string) $data['billing_email']) : '';
-        $country  = isset($data['billing_country']) ? trim((string) $data['billing_country']) : '';
-        $postcode = isset($data['billing_postcode']) ? trim((string) $data['billing_postcode']) : '';
-        $phone    = isset($data['billing_phone']) ? trim((string) $data['billing_phone']) : '';
-
-        if ($email === '' || !is_email($email)) {
-            return new \WP_Error('paykka_billing_email', __('请填写有效的账单邮箱。', 'paykka-for-woocommerce'));
-        }
-        if ($country === '') {
-            return new \WP_Error('paykka_billing_country', __('请选择账单国家/地区。', 'paykka-for-woocommerce'));
-        }
-        if ($postcode !== '' && class_exists('WC_Validation') && !\WC_Validation::is_postcode($postcode, $country)) {
-            return new \WP_Error('paykka_billing_postcode', __('账单邮编 / ZIP 格式不正确，请按国家/地区要求修改后再支付。', 'paykka-for-woocommerce'));
-        }
-        if ($phone !== '' && class_exists('WC_Validation') && !\WC_Validation::is_phone($phone)) {
-            return new \WP_Error('paykka_billing_phone', __('账单电话号码格式不正确。', 'paykka-for-woocommerce'));
-        }
-        return true;
     }
 
     private function sync_checkout_customer($data)

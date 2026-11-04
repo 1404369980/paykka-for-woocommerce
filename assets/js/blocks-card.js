@@ -392,14 +392,11 @@
     }
 
     /**
-     * Session 仅在具备最小账单信息时创建一次；改地址/加优惠券都不重建。
+     * Session 选中后即可创建；改地址/加优惠券都不重建。
      * 金额与账单在支付时经 _getExtraParams（trans_amount / bill）覆盖。
      */
     function sessionSignature(billing, shippingData) {
-        const p = buildCheckoutPayload(billing, shippingData);
-        return JSON.stringify({
-            ready: !!(p.billing_email && p.billing_country),
-        });
+        return 'paykka-card-ready';
     }
 
     /**
@@ -691,16 +688,17 @@
                         cardCache.skipSubmitNote = false;
                         return;
                     }
-                    // Apple Pay / Google Pay：Session 创建时已建单；这里只刷新地址。
-                    // 绑定失败不标 failed（支付可能仍在进行，避免与成功 webhook 竞态）。
+                    // Apple Pay / Google Pay：点钱包支付时才创建/刷新 WC 订单。
                     notePlaceOrder(billingRef.current, shippingRef.current).then(function (bindResult) {
-                        if (!bindResult || !bindResult.ok) {
-                            setError(
-                                (bindResult && bindResult.message) ||
-                                    i18n.orderBindFailed ||
-                                    'Could not create order'
-                            );
+                        if (bindResult && bindResult.ok && bindResult.order_id && cardCache.sessionData) {
+                            cardCache.sessionData.order_id = bindResult.order_id;
+                            return;
                         }
+                        setError(
+                            (bindResult && bindResult.message) ||
+                                i18n.orderBindFailed ||
+                                'Could not create order'
+                        );
                     });
                 },
                 onSuccess: function (payload) {
@@ -842,15 +840,7 @@
                 const sig = sessionSignature(billingRef.current, shippingRef.current);
                 const payload = buildCheckoutPayload(billingRef.current, shippingRef.current);
 
-                if (!payload.billing_email || !payload.billing_country) {
-                    destroyCachedCard();
-                    setReady(false);
-                    setError('');
-                    setStatus(i18n.needBilling || 'Need billing');
-                    return;
-                }
-
-                // 字段校验仅在下单时拦截；填表过程中不销毁支付组件（否则输入框偶发空白）
+                // 选中即可创建 Session，不要求先填邮箱/国家（支付时再经 _getExtraParams 覆盖）
                 if (!forceNew && restoreCached(sig)) {
                     return;
                 }
@@ -1034,45 +1024,72 @@
                     setError('');
                     cardCache.skipSubmitNote = true;
 
-                    // Create Session 时已建 pending 单。点击下单必须尽快调 payment()，
-                    // 不能先 await 绑单 AJAX（会打断原时序，出现 hidden iframe postMessage
-                    // 卡死、一直转圈）。绑单只在后台刷新地址。
-                    const hasBoundOrder = !!(
-                        cardCache.sessionData && Number(cardCache.sessionData.order_id) > 0
-                    );
+                    // 仅在点击「下单」时创建 WC 订单，成功后再调 SDK payment()。
+                    return notePlaceOrder(billingRef.current, shippingRef.current).then(function (
+                        bindResult
+                    ) {
+                        if (!bindResult || !bindResult.ok) {
+                            cardCache.skipSubmitNote = false;
+                            setStatus('');
+                            return {
+                                type: emitResponse.responseTypes.ERROR,
+                                message:
+                                    (bindResult && bindResult.message) ||
+                                    i18n.orderBindFailed ||
+                                    'Could not create order',
+                                messageContext: emitResponse.noticeContexts.PAYMENTS,
+                            };
+                        }
+                        if (bindResult.order_id && cardCache.sessionData) {
+                            cardCache.sessionData.order_id = bindResult.order_id;
+                        }
 
-                    return new Promise(function (resolve) {
-                        let settled = false;
-                        const finish = function (result) {
-                            if (settled) {
-                                return;
-                            }
-                            settled = true;
-                            cardCache.payResolver = null;
+                        return new Promise(function (resolve) {
+                            let settled = false;
+                            const finish = function (result) {
+                                if (settled) {
+                                    return;
+                                }
+                                settled = true;
+                                cardCache.payResolver = null;
+                                if (cardCache.payTimer) {
+                                    clearTimeout(cardCache.payTimer);
+                                    cardCache.payTimer = null;
+                                }
+                                if (!result || result.ok === false) {
+                                    cardCache.skipSubmitNote = false;
+                                    setStatus('');
+                                    const failMsg =
+                                        (result && result.message) ||
+                                        i18n.needCard ||
+                                        i18n.error ||
+                                        'Payment failed';
+                                    if (result && result.markFailed === true) {
+                                        markPaymentFailed(failMsg);
+                                    }
+                                    resolve({
+                                        type: emitResponse.responseTypes.ERROR,
+                                        message: failMsg,
+                                        messageContext: emitResponse.noticeContexts.PAYMENTS,
+                                    });
+                                }
+                            };
+
+                            cardCache.payResolver = finish;
                             if (cardCache.payTimer) {
                                 clearTimeout(cardCache.payTimer);
-                                cardCache.payTimer = null;
                             }
-                            if (!result || result.ok === false) {
-                                cardCache.skipSubmitNote = false;
-                                setStatus('');
-                                const failMsg =
-                                    (result && result.message) ||
-                                    i18n.needCard ||
-                                    i18n.error ||
-                                    'Payment failed';
-                                if (result && result.markFailed === true) {
-                                    markPaymentFailed(failMsg);
-                                }
-                                resolve({
-                                    type: emitResponse.responseTypes.ERROR,
-                                    message: failMsg,
-                                    messageContext: emitResponse.noticeContexts.PAYMENTS,
+                            cardCache.payTimer = setTimeout(function () {
+                                finish({
+                                    ok: false,
+                                    message:
+                                        i18n.payTimeout ||
+                                        i18n.error ||
+                                        'Payment is taking longer than expected. Please wait or retry.',
+                                    markFailed: false,
                                 });
-                            }
-                        };
+                            }, 120000);
 
-                        const startPay = function () {
                             try {
                                 const maybe = cardCache.card.ref.payment();
                                 if (maybe && typeof maybe.then === 'function') {
@@ -1095,49 +1112,6 @@
                                     markFailed: false,
                                 });
                             }
-                        };
-
-                        cardCache.payResolver = finish;
-                        if (cardCache.payTimer) {
-                            clearTimeout(cardCache.payTimer);
-                        }
-                        cardCache.payTimer = setTimeout(function () {
-                            finish({
-                                ok: false,
-                                message:
-                                    i18n.payTimeout ||
-                                    i18n.error ||
-                                    'Payment is taking longer than expected. Please wait or retry.',
-                                markFailed: false,
-                            });
-                        }, 120000);
-
-                        if (hasBoundOrder) {
-                            // 与改前一致：不阻塞，立刻 payment；后台刷新订单地址
-                            notePlaceOrder(billingRef.current, shippingRef.current);
-                            startPay();
-                            return;
-                        }
-
-                        // 极端兜底：Session 响应里还没有 order_id 时，先绑单再付
-                        notePlaceOrder(billingRef.current, shippingRef.current).then(function (
-                            bindResult
-                        ) {
-                            if (!bindResult || !bindResult.ok) {
-                                finish({
-                                    ok: false,
-                                    message:
-                                        (bindResult && bindResult.message) ||
-                                        i18n.orderBindFailed ||
-                                        'Could not create order',
-                                    markFailed: false,
-                                });
-                                return;
-                            }
-                            if (bindResult.order_id && cardCache.sessionData) {
-                                cardCache.sessionData.order_id = bindResult.order_id;
-                            }
-                            startPay();
                         });
                     });
                 });
@@ -1147,7 +1121,12 @@
         );
 
         // 对齐 WC：选中后始终渲染非空内容区，避免 accordion `:empty` 把整块隐藏
-        const showStatus = !!(status && (!ready || status === (i18n.paying || 'Paying…') || status === (i18n.needBilling || 'Need billing') || status === (i18n.loading || 'Loading…')));
+        const showStatus = !!(
+            status &&
+            (!ready ||
+                status === (i18n.paying || 'Paying…') ||
+                status === (i18n.loading || 'Loading…'))
+        );
 
         return createElement(
             'div',

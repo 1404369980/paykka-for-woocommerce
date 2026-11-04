@@ -17,7 +17,7 @@ class PaykkaCallBackHandler
     }
 
     /**
-     * Card：Create Session 后即绑定 pending WC 订单；callback 仍用 attempt_id 解析。
+     * Card：Create Session 时尚无 WC 订单；点下单绑定后再用 attempt_id 解析。
      */
     public static function getCallbackUrlByAttempt($attempt_id)
     {
