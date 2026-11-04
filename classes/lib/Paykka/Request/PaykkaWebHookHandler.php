@@ -228,6 +228,20 @@ class PaykkaWebHookHandler
             }
         }
 
+        // Card 渠道专用映射（不影响 Hosted：仅当订单确认为 paykka-card）
+        if (function_exists('paykka_resolve_order_id_by_trans_or_session')) {
+            $mapped = paykka_resolve_order_id_by_trans_or_session(
+                !empty($payload['trans_id']) ? (string) $payload['trans_id'] : '',
+                !empty($payload['session_id']) ? (string) $payload['session_id'] : ''
+            );
+            if ($mapped > 0) {
+                $order = wc_get_order($mapped);
+                if ($order && $order->get_id() && $order->get_payment_method() === 'paykka-card') {
+                    return $order;
+                }
+            }
+        }
+
         return null;
     }
 

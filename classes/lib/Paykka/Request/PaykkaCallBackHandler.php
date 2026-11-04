@@ -16,38 +16,46 @@ class PaykkaCallBackHandler
         ), home_url('/'));
     }
 
+    /**
+     * Card Create Session 时尚无 WC 订单：用 attempt_id；下单绑定后再解析。
+     */
+    public static function getCallbackUrlByAttempt($attempt_id)
+    {
+        return add_query_arg(array(
+            'wc-api'     => 'WC_Gateway_Paykka_Payment_callback',
+            'attempt_id' => sanitize_text_field((string) $attempt_id),
+        ), home_url('/'));
+    }
+
     public function handle_payment_callback()
     {
-        $order_id = isset($_REQUEST['order_id']) ? absint($_REQUEST['order_id']) : 0;
-        if (!$order_id) {
-            wp_safe_redirect(wc_get_checkout_url());
-            exit;
+        $order_id   = isset($_REQUEST['order_id']) ? absint($_REQUEST['order_id']) : 0;
+        $attempt_id = !empty($_REQUEST['attempt_id']) ? sanitize_text_field(wp_unslash($_REQUEST['attempt_id'])) : '';
+
+        // Card：attempt_id；Hosted：order_id
+        if (!$order_id && $attempt_id !== '' && function_exists('paykka_resolve_order_id_by_attempt')) {
+            $order_id = paykka_resolve_order_id_by_attempt($attempt_id);
         }
 
-        $order = wc_get_order($order_id);
+        $order = $order_id ? wc_get_order($order_id) : null;
         if (!$order || !$order->get_id()) {
-            wp_safe_redirect(wc_get_checkout_url());
-            exit;
+            $this->redirect_checkout();
         }
 
-        if ($order->get_status() === 'processing' || $order->get_status() === 'completed') {
-            if (function_exists('WC') && WC()->cart) {
-                WC()->cart->empty_cart();
-            }
-            if (function_exists('WC') && WC()->session) {
-                WC()->session->__unset('paykka_card_checkout_order_id');
-                WC()->session->__unset('paykka_checkout_order_id');
-            }
-            wp_safe_redirect($order->get_checkout_order_received_url());
-            exit;
+        if ($attempt_id !== '' && !$this->is_valid_card_attempt($order, $attempt_id)) {
+            $this->redirect_checkout();
+        }
+
+        if (in_array($order->get_status(), array('processing', 'completed'), true)) {
+            $this->finish_success($order);
         }
 
         require_once PAYKKA_PLUGIN_PATH . 'classes/lib/Paykka/Request/PaykkaRequestHandler.php';
-        $paykkaPaymentHelper = new PaykkaRequestHandler();
-        $query_result = $paykkaPaymentHelper->queryPaymentForOrder($order);
+        $helper = new PaykkaRequestHandler();
+        $query_result = $helper->queryPaymentForOrder($order);
 
         if (is_array($query_result) && isset($query_result['ret_code']) && $query_result['ret_code'] === '000000') {
-            $paykkaPaymentHelper->syncOrderByQueryResult($order, $query_result, 'callback');
+            $helper->syncOrderByQueryResult($order, $query_result, 'callback');
             $order = wc_get_order($order_id);
 
             $status = '';
@@ -60,18 +68,9 @@ class PaykkaCallBackHandler
             if (in_array($status, array('SUCCESS', 'AUTHORIZED'), true)
                 || ($order && in_array($order->get_status(), array('processing', 'completed', 'on-hold'), true))
             ) {
-                if (function_exists('WC') && WC()->cart) {
-                    WC()->cart->empty_cart();
-                }
-                if (function_exists('WC') && WC()->session) {
-                    WC()->session->__unset('paykka_card_checkout_order_id');
-                    WC()->session->__unset('paykka_checkout_order_id');
-                }
-                wp_safe_redirect($order->get_checkout_order_received_url());
-                exit;
+                $this->finish_success($order);
             }
 
-            // 查到了但未成功（FAILURE / PROCESSING 等）：回结账页，不进感谢页
             if (function_exists('wc_add_notice')) {
                 if ($status === 'FAILURE' || $status === 'CANCELED') {
                     wc_add_notice(__('支付未成功，请重试或更换支付方式。', 'paykka-for-woocommerce'), 'error');
@@ -79,8 +78,7 @@ class PaykkaCallBackHandler
                     wc_add_notice(__('支付结果确认中，请稍候刷新或联系客服。', 'paykka-for-woocommerce'), 'notice');
                 }
             }
-            wp_safe_redirect(wc_get_checkout_url());
-            exit;
+            $this->redirect_checkout();
         }
 
         if (function_exists('paykka_is_debug') && paykka_is_debug()) {
@@ -91,6 +89,40 @@ class PaykkaCallBackHandler
         if (function_exists('wc_add_notice')) {
             wc_add_notice(__('暂时无法确认支付结果，请稍后再试或联系客服。', 'paykka-for-woocommerce'), 'error');
         }
+        $this->redirect_checkout();
+    }
+
+    /**
+     * @param \WC_Order $order
+     * @param string    $attempt_id
+     * @return bool
+     */
+    private function is_valid_card_attempt($order, $attempt_id)
+    {
+        if ($order->get_payment_method() !== 'paykka-card') {
+            return false;
+        }
+        $meta_attempt = (string) $order->get_meta('_paykka_attempt_id', true);
+        return $meta_attempt === '' || hash_equals($meta_attempt, $attempt_id);
+    }
+
+    /**
+     * @param \WC_Order $order
+     */
+    private function finish_success($order)
+    {
+        if (function_exists('WC') && WC()->cart) {
+            WC()->cart->empty_cart();
+        }
+        if ($order && $order->get_payment_method() === 'paykka-card' && function_exists('paykka_clear_checkout_attempt_session')) {
+            paykka_clear_checkout_attempt_session();
+        }
+        wp_safe_redirect($order->get_checkout_order_received_url());
+        exit;
+    }
+
+    private function redirect_checkout()
+    {
         wp_safe_redirect(wc_get_checkout_url());
         exit;
     }

@@ -26,7 +26,7 @@ final class WC_Gateway_Paykka_Card_Support extends AbstractPaymentMethodType
 
     public function get_payment_method_script_handles()
     {
-        $version = '1.5.10';
+        $version = '1.5.23';
         $checkout_url = function_exists('paykka_get_checkout_base_url') ? paykka_get_checkout_base_url() : '';
         $script_url   = rtrim($checkout_url, '/') . '/cp/card-checkout-ui.js';
         $style_url    = rtrim($checkout_url, '/') . '/cp/style.css';
@@ -71,6 +71,14 @@ final class WC_Gateway_Paykka_Card_Support extends AbstractPaymentMethodType
             $title = __('Payments', 'paykka-for-woocommerce');
         }
 
+        // Card 业务层：进入结账即生成 attempt_id（与 Hosted 无关）
+        $attempt_id = '';
+        if (class_exists('Paykka_Card_Checkout_Service')) {
+            $attempt_id = Paykka_Card_Checkout_Service::get_or_create_attempt_id();
+        } elseif (function_exists('paykka_get_or_create_checkout_attempt_id')) {
+            $attempt_id = paykka_get_or_create_checkout_attempt_id();
+        }
+
         return array(
             'title'       => $title,
             'description' => '',
@@ -78,6 +86,7 @@ final class WC_Gateway_Paykka_Card_Support extends AbstractPaymentMethodType
             'ajaxUrl'     => WC_AJAX::get_endpoint('paykka_card_create_session'),
             'noteAjaxUrl' => WC_AJAX::get_endpoint('paykka_card_place_order_note'),
             'nonce'       => wp_create_nonce('paykka_card_checkout'),
+            'attemptId'   => $attempt_id,
             'clientKey'   => isset($settings['paykka_client_key']) ? $settings['paykka_client_key'] : '',
             'env'         => $env,
             'gatewayId'   => 'paykka-card',

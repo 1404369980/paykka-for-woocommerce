@@ -155,13 +155,14 @@
         return codes.indexOf(target) !== -1;
     }
 
-    function notePlaceOrder() {
+    function notePlaceOrder(billing, shippingData) {
         const url = settings.noteAjaxUrl;
         if (!url) {
             return Promise.resolve(false);
         }
         const body = new URLSearchParams();
         body.set('security', settings.nonce || '');
+        body.set('billing', JSON.stringify(buildCheckoutPayload(billing, shippingData)));
         return fetch(url, {
             method: 'POST',
             credentials: 'same-origin',
@@ -202,7 +203,60 @@
         };
     }
 
-    function buildCheckoutPayload(billing, shippingData) {
+    function splitPhone(phone) {
+        const raw = String(phone || '').trim();
+        if (!raw) {
+            return { area_code: '', phone_number: '' };
+        }
+        const parts = raw.split(/\s+/);
+        if (parts.length >= 2 && parts[1]) {
+            return {
+                area_code: String(parts[0]).slice(0, 10),
+                phone_number: parts.slice(1).join(' '),
+            };
+        }
+        return { area_code: '', phone_number: raw };
+    }
+
+    /**
+     * _getExtraParams 的 bill / shipping 结构（与支付侧约定一致，不做 N/A 等默认兜底）。
+     */
+    function buildPaykkaBillOrShipping(address, fallbackEmail) {
+        const a = address || {};
+        const phone = splitPhone(a.phone);
+        return {
+            first_name: a.first_name || '',
+            middle_name: a.middle_name || '',
+            last_name: a.last_name || '',
+            email: a.email || fallbackEmail || '',
+            country: a.country || '',
+            state: a.state || '',
+            city: a.city || '',
+            postal_code: a.postcode || '',
+            address_line1: a.address_1 || '',
+            address_line2: a.address_2 || '',
+            district: a.district || '',
+            area_code: phone.area_code || '',
+            phone_number: phone.phone_number || '',
+        };
+    }
+
+    /**
+     * 是否有真实收货信息（有才传 shipping，无则不传；不回退账单、不填默认值）。
+     */
+    function hasRealShippingAddress(address) {
+        const a = address || {};
+        return !!(
+            a.address_1 ||
+            a.city ||
+            a.postcode ||
+            a.last_name ||
+            a.first_name ||
+            a.country
+        );
+    }
+
+    function resolveBillingAddress(billing) {
         const billingAddress = Object.assign(
             {},
             (billing && billing.billingAddress) || {},
@@ -210,15 +264,20 @@
             billing && billing.phone ? { phone: billing.phone } : {}
         );
         const hasCountry = !!(billingAddress.country || (billing && billing.country));
-        const address = hasCountry
-            ? billingAddress
-            : Object.assign({}, billing || {}, billingAddress);
+        return hasCountry ? billingAddress : Object.assign({}, billing || {}, billingAddress);
+    }
 
-        const shippingAddress =
+    function resolveShippingAddress(billing, shippingData) {
+        return (
             (shippingData && shippingData.shippingAddress) ||
             (billing && billing.shippingAddress) ||
-            {};
+            {}
+        );
+    }
 
+    function buildCheckoutPayload(billing, shippingData) {
+        const address = resolveBillingAddress(billing);
+        const shippingAddress = resolveShippingAddress(billing, shippingData);
         const payload = Object.assign(
             { payment_method: gatewayId },
             mapBlocksAddress('billing', address),
@@ -230,24 +289,71 @@
         return payload;
     }
 
+    function getCartAmountParts(billing) {
+        const currencyObj = (billing && billing.currency) || {};
+        const currency =
+            (typeof currencyObj === 'string' ? currencyObj : currencyObj.code) ||
+            (billing && billing.currencyCode) ||
+            '';
+        const cartTotal = (billing && billing.cartTotal) || {};
+        const amount =
+            cartTotal.value != null && cartTotal.value !== ''
+                ? String(cartTotal.value)
+                : '';
+        return { amount: amount, currency: String(currency || '') };
+    }
+
+    /**
+     * Session 仅在具备最小账单信息时创建一次；改地址/加优惠券都不重建。
+     * 金额与账单在支付时经 _getExtraParams（amount / bill）覆盖。
+     */
     function sessionSignature(billing, shippingData) {
         const p = buildCheckoutPayload(billing, shippingData);
         return JSON.stringify({
-            email: p.billing_email || '',
-            country: p.billing_country || '',
-            first: p.billing_first_name || '',
-            last: p.billing_last_name || '',
-            line1: p.billing_address_1 || '',
-            city: p.billing_city || '',
-            post: p.billing_postcode || '',
-            state: p.billing_state || '',
-            phone: p.billing_phone || '',
-            s_country: p.shipping_country || '',
-            s_line1: p.shipping_address_1 || '',
-            s_city: p.shipping_city || '',
-            s_post: p.shipping_postcode || '',
-            s_last: p.shipping_last_name || '',
+            ready: !!(p.billing_email && p.billing_country),
         });
+    }
+
+    /**
+     * 结账页用户当前输入的邮箱（优先于创建 session 时的默认邮箱）。
+     */
+    function resolveEnteredEmail(billing) {
+        const billAddr = resolveBillingAddress(billing);
+        const email = String(
+            (billAddr && billAddr.email) || (billing && billing.email) || ''
+        ).trim();
+        return email;
+    }
+
+    function buildExtraParams(billing, shippingData, sessionFallback) {
+        const billAddr = resolveBillingAddress(billing);
+        const shipAddr = resolveShippingAddress(billing, shippingData);
+        // 下单支付：必须用用户输入邮箱覆盖 Create Session 的默认邮箱
+        const email = resolveEnteredEmail(billing);
+        const money = getCartAmountParts(billing);
+        let amountNum =
+            money.amount !== '' && money.amount != null ? parseInt(String(money.amount), 10) : NaN;
+        let currency = money.currency || '';
+        if ((isNaN(amountNum) || money.amount === '') && sessionFallback && sessionFallback.amount != null) {
+            amountNum = parseInt(String(sessionFallback.amount), 10);
+        }
+        if (!currency && sessionFallback && sessionFallback.currency) {
+            currency = String(sessionFallback.currency);
+        }
+
+        // 约定结构：currency / amount / bill；shipping 有真实地址才传
+        const extras = {
+            currency: currency,
+            amount: !isNaN(amountNum) ? amountNum : 0,
+            bill: buildPaykkaBillOrShipping(billAddr, email),
+            customer: {
+                email: email,
+            },
+        };
+        if (hasRealShippingAddress(shipAddr)) {
+            extras.shipping = buildPaykkaBillOrShipping(shipAddr, email);
+        }
+        return extras;
     }
 
     function formatFormValidateError(formValidateError) {
@@ -436,6 +542,13 @@
                 env: data.env || settings.env || 'sandbox',
                 // 卡支付走 WC 下单按钮；钱包按钮由 Apple/Google 组件自身展示
                 hidePaymentButton: true,
+                // 支付时补齐 currency / amount / bill；（有收货时再带 shipping）
+                _getExtraParams: function (type) {
+                    if (type && type !== 'payment') {
+                        return {};
+                    }
+                    return buildExtraParams(billingRef.current, shippingRef.current, data);
+                },
                 onPaymentMethodsReady: function (methods) {
                     cardCache.readyMethods = normalizeMethodCodes(methods);
                 },
@@ -467,8 +580,8 @@
                         cardCache.skipSubmitNote = false;
                         return;
                     }
-                    // Apple Pay / Google Pay 按钮提交
-                    notePlaceOrder();
+                    // Apple Pay / Google Pay 按钮提交：同步最新地址到 WC 订单
+                    notePlaceOrder(billingRef.current, shippingRef.current);
                 },
                 onSuccess: function (payload) {
                     cardCache.payResolver = null;
@@ -548,6 +661,7 @@
             const cardOpts = {
                 showCardBrands: true,
                 cardInfoLayout: 'combine',
+                showEmail: false,
                 showHolderName: false,
                 onSubmit: function (formValidateError) {
                     const message = formatFormValidateError(formValidateError);
@@ -634,7 +748,9 @@
                     const body = new URLSearchParams();
                     body.set('security', settings.nonce || '');
                     body.set('payment_method', gatewayId);
-                    body.set('force_new', '1');
+                    if (forceNew) {
+                        body.set('force_new', '1');
+                    }
                     body.set('billing', JSON.stringify(payload));
 
                     const response = await fetch(settings.ajaxUrl, {
@@ -786,7 +902,7 @@
                             });
                         }, 60000);
 
-                        notePlaceOrder().finally(function () {
+                        notePlaceOrder(billingRef.current, shippingRef.current).finally(function () {
                             try {
                                 const maybe = cardCache.card.ref.payment();
                                 if (maybe && typeof maybe.then === 'function') {

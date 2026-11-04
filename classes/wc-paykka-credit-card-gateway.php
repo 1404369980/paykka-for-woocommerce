@@ -370,7 +370,7 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
             return array('result' => 'failure', 'message' => __('Invalid order', 'paykka-for-woocommerce'));
         }
 
-        // 每次 Hosted 发起必须新 trans_id（一 id 一 session；取消/失败重试不撞旧 Session）
+        // Hosted 业务：基于已有 WC 订单开新 attempt（与 Embedded Card attempt_id 流程隔离）
         $trans_id = function_exists('paykka_begin_payment_attempt')
             ? paykka_begin_payment_attempt($order, 'hosted')
             : '';

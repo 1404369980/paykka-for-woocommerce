@@ -218,8 +218,42 @@ function paykka_new_trans_id($order)
 }
 
 /**
- * 开启新 Attempt：归档旧 trans/session，写入新 _paykka_trans_id，清空 session meta。
- * Hosted / Card 每次真正 Create Session 前调用。
+ * Card 业务层薄封装（回调 / Blocks / Webhook 入口）。Hosted 勿用。
+ */
+function paykka_card_service_bootstrap()
+{
+    if (!class_exists('Paykka_Card_Checkout_Service')) {
+        require_once PAYKKA_PLUGIN_PATH . 'classes/Service/class-paykka-card-checkout-service.php';
+    }
+}
+
+function paykka_get_or_create_checkout_attempt_id()
+{
+    paykka_card_service_bootstrap();
+    return Paykka_Card_Checkout_Service::get_or_create_attempt_id();
+}
+
+function paykka_resolve_order_id_by_attempt($attempt_id)
+{
+    paykka_card_service_bootstrap();
+    return Paykka_Card_Checkout_Service::resolve_order_id_by_attempt($attempt_id);
+}
+
+function paykka_resolve_order_id_by_trans_or_session($trans_id = '', $session_id = '')
+{
+    paykka_card_service_bootstrap();
+    return Paykka_Card_Checkout_Service::resolve_order_id_by_trans_or_session($trans_id, $session_id);
+}
+
+function paykka_clear_checkout_attempt_session()
+{
+    paykka_card_service_bootstrap();
+    Paykka_Card_Checkout_Service::clear_checkout_session();
+}
+
+/**
+ * Hosted（及已有 WC 订单）开启新 Attempt：归档旧 trans/session，写入新 _paykka_trans_id。
+ * Embedded Card 预下单流程请用 Paykka_Card_Checkout_Service，不要走这里。
  *
  * @param \WC_Order $order
  * @param string    $channel hosted|card

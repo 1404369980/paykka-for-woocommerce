@@ -77,7 +77,12 @@ class PaymentRequest {
         if (is_array($object)) {
             return array_map(fn($item) => $this->objectToArray($item), $object);
         }
-        return get_object_vars($object);
+        // 去掉未赋值字段，避免 COMPONENT 精简 customer 带出 null email/id 等
+        $vars = array_filter(get_object_vars($object), function ($v) {
+            return $v !== null && $v !== '';
+        });
+        // 空关联数组 json 会变成 []，PayKKa 会返回 Invalid request；应省略该对象
+        return $vars === array() ? null : $vars;
     }
 
 }

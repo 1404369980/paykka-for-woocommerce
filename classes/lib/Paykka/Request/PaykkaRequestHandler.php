@@ -277,118 +277,185 @@ class PaykkaRequestHandler
     }
 
     // ========================================================================
-    // 业务方法：Hosted Session / 交易查询 / 退款 / 退款查询
+    // 接口层：Session / 交易查询 / 退款（HTTP）
+    // Card → createComponentSessionFromCart；Hosted → buildSessionUrl / createHostedSession
     // ========================================================================
 
+    /**
+     * Hosted 网关入口（兼容旧方法名）。
+     */
     public function buildSessionUrl($order): mixed
     {
-        return $this->handlerSession($order, 'HOSTED');
+        return $this->createHostedSession($order);
     }
 
     /**
-     * 创建结账页内嵌 Card / Drop-in 用的 Session。
-     * 接口: POST /v3/payment/acq/session
-     * Card 组件推荐 session_mode=COMPONENT；Drop-in 使用 DROP_IN。见 PayKKa Component Web 文档。
+     * Hosted：基于 WC 订单创建 HOSTED Session。
      */
-    public function buildDropInSession($order): mixed
+    public function createHostedSession($order): mixed
     {
-        return $this->handlerSession($order, 'COMPONENT');
+        $paykkaSettings = getPaykkaSettings();
+        $callback_url   = PaykkaCallBackHandler::getCallbackUrl($order->get_id());
+        $trans_id       = trim((string) $order->get_meta('_paykka_trans_id', true));
+        if ($trans_id === '') {
+            $trans_id = (string) $order->get_id();
+        }
+
+        $decimal_places = (int) get_option('woocommerce_price_num_decimals', 2);
+        $paymentRequest = $this->newSessionPaymentRequest(array(
+            'merchant_id'  => $paykkaSettings['paykka_merchant_id'],
+            'trans_id'     => $trans_id,
+            'currency'     => $order->get_currency(),
+            'amount'       => (int) round(((float) $order->get_total()) * pow(10, $decimal_places)),
+            'return_url'   => $callback_url,
+            'cancel_url'   => get_option('paykka_cancel_url', $callback_url),
+            'session_mode' => 'HOSTED',
+        ));
+
+        $paymentRequest->goods    = $this->buildGoodsItems($order);
+        $paymentRequest->customer = $this->buildCustomer($order);
+        $paymentRequest->bill     = $this->buildBill($order);
+        $paymentRequest->shipping = $this->buildShipping($order);
+        $paymentRequest->payment  = new PaymentInfo();
+
+        return $this->postAcqSession($paymentRequest, true);
     }
 
     /**
-     * 创建收银台 Session（Hosted / DROP_IN）
-     * 接口: POST /v3/payment/acq/session
+     * Card / COMPONENT：购物车上下文创建 Session（无 WC 订单）。
+     *
+     * @param array $ctx trans_id, amount, currency, return_url, cancel_url?, enable_saved_cards?
+     * @return array
      */
-    public function handlerSession($order, $session_mode)
+    public function createComponentSessionFromCart(array $ctx): mixed
+    {
+        if (!function_exists('WC') || !WC()->cart || WC()->cart->is_empty()) {
+            return array('ret_code' => '400', 'ret_msg' => 'Empty cart');
+        }
+
+        $trans_id   = isset($ctx['trans_id']) ? trim((string) $ctx['trans_id']) : '';
+        $return_url = isset($ctx['return_url']) ? (string) $ctx['return_url'] : '';
+        $cancel_url = isset($ctx['cancel_url']) ? (string) $ctx['cancel_url'] : $return_url;
+        $currency   = isset($ctx['currency']) ? (string) $ctx['currency'] : get_woocommerce_currency();
+        $amount     = isset($ctx['amount']) ? (int) $ctx['amount'] : 0;
+        if ($trans_id === '' || $return_url === '' || $amount <= 0) {
+            return array('ret_code' => '400', 'ret_msg' => 'Missing session context');
+        }
+
+        $paykkaSettings = getPaykkaSettings();
+        $paymentRequest = $this->newSessionPaymentRequest(array(
+            'merchant_id'  => $paykkaSettings['paykka_merchant_id'],
+            'trans_id'     => $trans_id,
+            'currency'     => $currency,
+            'amount'       => $amount,
+            'return_url'   => $return_url,
+            'cancel_url'   => $cancel_url !== '' ? $cancel_url : $return_url,
+            'session_mode' => 'COMPONENT',
+        ));
+
+        $merchant_name = get_bloginfo('name');
+        if (is_string($merchant_name) && $merchant_name !== '') {
+            $paymentRequest->__set('display_merchant_name', $merchant_name);
+        }
+        $allowed = apply_filters('paykka_component_allowed_payment_methods', null, null);
+        if (is_array($allowed) && !empty($allowed)) {
+            $paymentRequest->__set('allowed_payment_methods', array_values($allowed));
+        }
+
+        $paymentRequest->goods    = $this->buildGoodsItemsFromCart();
+        $paymentRequest->customer = $this->buildCustomerMinimalFromCart();
+        $paymentRequest->bill     = $this->buildBillMinimalFromCart();
+        $shipping = $this->buildShippingFromCart();
+        if ($shipping) {
+            $paymentRequest->shipping = $shipping;
+        }
+
+        if (!empty($ctx['enable_saved_cards']) && $ctx['enable_saved_cards'] === 'yes' && is_user_logged_in()) {
+            $payment = new PaymentInfo();
+            $payment->__set('store_payment_method', true);
+            $payment->__set('shopper_reference', 'wc_user_' . get_current_user_id());
+            $payment->__set('token_usage', 'CARD_ON_FILE');
+            $paymentRequest->payment = $payment;
+        }
+
+        return $this->postAcqSession($paymentRequest, false);
+    }
+
+    /**
+     * @param array $args merchant_id, trans_id, currency, amount, return_url, cancel_url, session_mode
+     * @return PaymentRequest
+     */
+    private function newSessionPaymentRequest(array $args)
+    {
+        $paymentRequest = new PaymentRequest();
+        $paymentRequest->__set('merchant_id', $args['merchant_id']);
+        $paymentRequest->__set('payment_type', 'PURCHASE');
+        $paymentRequest->__set('trans_id', $args['trans_id']);
+        $paymentRequest->__set('currency', $args['currency']);
+        $paymentRequest->__set('amount', (int) $args['amount']);
+        $paymentRequest->__set('notify_url', PaykkaWebHookHandler::getWebHookUrl());
+        $paymentRequest->__set('return_url', $args['return_url']);
+        $paymentRequest->__set('cancel_url', $args['cancel_url']);
+        $paymentRequest->__set('expire_time', $this->sessionExpireTime());
+        $paymentRequest->__set('session_mode', $args['session_mode']);
+        $paymentRequest->__set(
+            'capture_method',
+            get_option('paykka_capture_method_flag') === 'yes' ? 'MANUAL' : 'AUTOMATIC'
+        );
+        return $paymentRequest;
+    }
+
+    private function sessionExpireTime(): string
+    {
+        $now = new \DateTime('now', new \DateTimeZone('UTC'));
+        $now->setTimezone(new \DateTimeZone('Asia/Hong_Kong'));
+        $now->add(new \DateInterval('PT1H'));
+        return $now->format('Y-m-d\TH:i:sO');
+    }
+
+    /**
+     * 接口层共用：签名并 POST /v3/payment/acq/session。
+     *
+     * @param PaymentRequest $paymentRequest
+     * @param bool           $with_wc_notices Hosted 下单路径需要 notice；Card AJAX 不需要
+     * @return array|null
+     */
+    private function postAcqSession($paymentRequest, $with_wc_notices = false)
     {
         $paykkaSettings = getPaykkaSettings();
         $merchant_id = $paykkaSettings['paykka_merchant_id'];
         $private_key = $paykkaSettings['paykka_private_key'];
         $app_id = $this->getAppId($merchant_id);
 
-        $now = new \DateTime('now', new \DateTimeZone('UTC'));
-        $now->setTimezone(new \DateTimeZone('Asia/Hong_Kong'));
-        // Hosted / COMPONENT / DROP_IN Session 有效期均为 1 小时
-        $ttl = 'PT1H';
-        $now->add(new \DateInterval($ttl));
-        $expire_time = $now->format('Y-m-d\TH:i:sO');
-
-        $callback_url = PaykkaCallBackHandler::getCallbackUrl($order->get_id());
-        $notify_url = PaykkaWebHookHandler::getWebHookUrl();
-        $cancel_url = get_option('paykka_cancel_url', $callback_url);
-
-        $decimal_places = get_option('woocommerce_price_num_decimals', 2);
-        $order_amount = intval(round($order->get_total() * pow(10, $decimal_places)));
-
-        $paymentRequest = new PaymentRequest();
-        $paymentRequest->__set('merchant_id', $merchant_id);
-        $paymentRequest->__set('payment_type', 'PURCHASE');
-        // COMPONENT 每次需新 session；同一 trans_id 会返回旧 session，刷新后无法二次 init
-        $trans_id = trim((string) $order->get_meta('_paykka_trans_id', true));
-        if ($trans_id === '') {
-            $trans_id = (string) $order->get_id();
-        }
-        $paymentRequest->__set('trans_id', $trans_id);
-        $paymentRequest->__set('currency', $order->get_currency());
-        $paymentRequest->__set('amount', $order_amount);
-        $paymentRequest->__set('notify_url', $notify_url);
-        $paymentRequest->__set('return_url', $callback_url);
-        $paymentRequest->__set('cancel_url', $cancel_url);
-        $paymentRequest->__set('expire_time', $expire_time);
-        $paymentRequest->__set('session_mode', $session_mode);
-
-        $paykka_capture_method_flag = get_option('paykka_capture_method_flag');
-        $paymentRequest->__set('capture_method', $paykka_capture_method_flag === 'yes' ? 'MANUAL' : 'AUTOMATIC');
-
-        // Embedded Payments：展示商户名；可用方式默认不限制（由商户开通决定），可用 filter 覆盖
-        if ($session_mode === 'COMPONENT') {
-            $merchant_name = get_bloginfo('name');
-            if (is_string($merchant_name) && $merchant_name !== '') {
-                $paymentRequest->__set('display_merchant_name', $merchant_name);
-            }
-            $allowed = apply_filters('paykka_component_allowed_payment_methods', null, $order);
-            if (is_array($allowed) && !empty($allowed)) {
-                $paymentRequest->__set('allowed_payment_methods', array_values($allowed));
-            }
-        }
-
-        $paymentRequest->bill = $this->buildBill($order);
-        $paymentRequest->shipping = $this->buildShipping($order);
-        $paymentRequest->goods = $this->buildGoodsItems($order);
-        $paymentRequest->customer = $this->buildCustomer($order);
-        $payment = new PaymentInfo();
-        if ($session_mode === 'DROP_IN' && get_option('paykka_enable_saved_cards', 'no') === 'yes' && is_user_logged_in()) {
-            $payment->__set('store_payment_method', true);
-            $payment->__set('shopper_reference', 'wc_user_' . get_current_user_id());
-            $payment->__set('token_usage', 'CARD_ON_FILE');
-        }
-        $paymentRequest->payment = $payment;
-
         $http_body = $paymentRequest->toJson();
         $request_path = '/v3/payment/acq/session';
         $headers = $this->buildV3Headers($request_path, $http_body, $private_key, $app_id);
         if ($headers === null) {
-            wc_add_notice(__('Payment signature error', 'paykka-for-woocommerce'), 'error');
-            return null;
+            if ($with_wc_notices) {
+                wc_add_notice(__('Payment signature error', 'paykka-for-woocommerce'), 'error');
+                return null;
+            }
+            return array('ret_code' => '400', 'ret_msg' => 'Payment signature error');
         }
 
         $api_result = $this->postApi($request_path, $http_body, $headers, 'Session');
         if (!empty($api_result['wp_error'])) {
-            wc_add_notice('Payment error: ' . $api_result['wp_error'], 'error');
-            return null;
+            if ($with_wc_notices) {
+                wc_add_notice('Payment error: ' . $api_result['wp_error'], 'error');
+                return null;
+            }
+            return array('ret_code' => '400', 'ret_msg' => (string) $api_result['wp_error']);
         }
 
         $parsed = $this->parseV3Response($api_result);
         if (isset($parsed['ret_code']) && $parsed['ret_code'] === '000000') {
             $data = isset($parsed['data']) && is_array($parsed['data']) ? $parsed['data'] : $parsed;
-            $session_id = isset($data['session_id']) ? $data['session_id'] : '';
-            $session_url = isset($data['session_url']) ? $data['session_url'] : '';
             return array(
                 'ret_code' => '000000',
                 'ret_msg'  => '',
                 'data'     => array(
-                    'session_id' => $session_id,
-                    'session_url' => $session_url,
+                    'session_id'  => isset($data['session_id']) ? $data['session_id'] : '',
+                    'session_url' => isset($data['session_url']) ? $data['session_url'] : '',
                 ),
             );
         }
@@ -937,21 +1004,36 @@ class PaykkaRequestHandler
         return $ship;
     }
 
-    private function buildCustomer($order)
+    /**
+     * 解析顾客 IP（Create Session customer 必填相关）。
+     */
+    private function resolveCustomerIp($order): string
     {
-        $customer = new PayCustomer();
-        $customer->id = $order->get_user_id() ? (string) $order->get_user_id() : ('guest_' . $order->get_id());
-        $ip = $order->get_customer_ip_address();
+        $ip = $order ? $order->get_customer_ip_address() : '';
         if ($ip === '' || $ip === null) {
-            // 必须用全局类名：本文件在 namespace 下，裸写 WC_Geolocation 会解析失败并 fatal
-            $ip = class_exists('\\WC_Geolocation') ? \WC_Geolocation::get_ip_address() : '';
+            $ip = $this->resolveRequestIp();
         }
+        return (string) $ip;
+    }
+
+    private function resolveRequestIp(): string
+    {
+        // 必须用全局类名：本文件在 namespace 下，裸写 WC_Geolocation 会 fatal
+        $ip = class_exists('\\WC_Geolocation') ? \WC_Geolocation::get_ip_address() : '';
         if ($ip === '' || $ip === null) {
             $ip = isset($_SERVER['REMOTE_ADDR']) ? sanitize_text_field(wp_unslash($_SERVER['REMOTE_ADDR'])) : '127.0.0.1';
         }
         if ($ip === '' || $ip === null) {
             $ip = '127.0.0.1';
         }
+        return (string) $ip;
+    }
+
+    private function buildCustomer($order)
+    {
+        $customer = new PayCustomer();
+        $customer->id = $order->get_user_id() ? (string) $order->get_user_id() : ('guest_' . $order->get_id());
+        $ip = $this->resolveCustomerIp($order);
         $customer->order_ip = $ip;
         $customer->pay_ip = $ip;
         $customer->email = $order->get_billing_email();
@@ -979,5 +1061,85 @@ class PaykkaRequestHandler
             $goods_items[] = $goods;
         }
         return $goods_items;
+    }
+
+    private function buildGoodsItemsFromCart()
+    {
+        $decimal_places = (int) get_option('woocommerce_price_num_decimals', 2);
+        $goods_items = array();
+        foreach (WC()->cart->get_cart() as $cart_item) {
+            $product = isset($cart_item['data']) ? $cart_item['data'] : null;
+            if (!$product || !is_a($product, 'WC_Product')) {
+                continue;
+            }
+            $goods = new Goods();
+            $goods->id = $product->get_id();
+            $goods->name = $product->get_name();
+            $goods->description = $product->get_description();
+            $goods->link = $product->get_permalink();
+            $goods->price = intval(round(((float) $product->get_price()) * pow(10, $decimal_places)));
+            $goods->quantity = isset($cart_item['quantity']) ? (int) $cart_item['quantity'] : 1;
+            $goods_items[] = $goods;
+        }
+        return $goods_items;
+    }
+
+    private function buildCustomerMinimalFromCart()
+    {
+        $customer = new PayCustomer();
+        $ip = $this->resolveRequestIp();
+        $customer->order_ip = $ip;
+        $customer->pay_ip = $ip;
+        return $customer;
+    }
+
+    private function buildBillMinimalFromCart()
+    {
+        $bill = new Bill();
+        $bill->email = apply_filters('paykka_component_session_default_email', 'admin_email@xgd.com', null);
+        $country = '';
+        if (WC()->customer) {
+            $country = trim((string) WC()->customer->get_billing_country());
+        }
+        $bill->country = $country !== '' ? $country : 'CN';
+        return $bill;
+    }
+
+    private function buildShippingFromCart()
+    {
+        if (!WC()->cart || !WC()->cart->needs_shipping() || !WC()->customer) {
+            return null;
+        }
+        $c = WC()->customer;
+        $last = trim((string) $c->get_shipping_last_name());
+        $line1 = trim((string) $c->get_shipping_address_1());
+        $city = trim((string) $c->get_shipping_city());
+        $post = trim((string) $c->get_shipping_postcode());
+        $country = trim((string) $c->get_shipping_country());
+        $use_billing = ($last === '' || $line1 === '' || $city === '' || $post === '');
+        if ($use_billing) {
+            $last = trim((string) $c->get_billing_last_name());
+            $line1 = trim((string) $c->get_billing_address_1());
+            $city = trim((string) $c->get_billing_city());
+            $post = trim((string) $c->get_billing_postcode());
+            $country = trim((string) $c->get_billing_country());
+        }
+        if ($country === '' || $line1 === '') {
+            return null;
+        }
+        $ship = new Shipping();
+        $ship->first_name = $use_billing ? $c->get_billing_first_name() : $c->get_shipping_first_name();
+        $ship->last_name = $last !== '' ? $last : 'Customer';
+        $ship->address_line1 = $line1;
+        $ship->address_line2 = $use_billing ? $c->get_billing_address_2() : $c->get_shipping_address_2();
+        $ship->country = $country;
+        $ship->state = $use_billing ? $c->get_billing_state() : $c->get_shipping_state();
+        $ship->city = $city !== '' ? $city : 'N/A';
+        $ship->postal_code = $post !== '' ? $post : '000000';
+        $phone = trim((string) ($c->get_shipping_phone() ?: $c->get_billing_phone()));
+        if ($phone !== '') {
+            $ship->phone_number = $phone;
+        }
+        return $ship;
     }
 }
