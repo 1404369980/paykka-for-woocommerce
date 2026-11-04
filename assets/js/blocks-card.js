@@ -289,23 +289,50 @@
         return payload;
     }
 
+    /**
+     * cartTotal.value 为最小货币单位整数，按 minorUnit 除回主单位。
+     * 例：value=100, minorUnit=2 → 1
+     */
+    function minorToMajorAmount(minorValue, minorUnit) {
+        const value = Number(minorValue);
+        if (!isFinite(value)) {
+            return NaN;
+        }
+        const unitRaw =
+            minorUnit != null && minorUnit !== ''
+                ? parseInt(String(minorUnit), 10)
+                : 2;
+        const decimals = !isNaN(unitRaw) && unitRaw >= 0 ? unitRaw : 2;
+        return value / Math.pow(10, decimals);
+    }
+
     function getCartAmountParts(billing) {
         const currencyObj = (billing && billing.currency) || {};
         const currency =
             (typeof currencyObj === 'string' ? currencyObj : currencyObj.code) ||
             (billing && billing.currencyCode) ||
             '';
+        const minorUnit =
+            typeof currencyObj === 'object' && currencyObj
+                ? currencyObj.minorUnit != null
+                    ? currencyObj.minorUnit
+                    : currencyObj.minor_unit
+                : 2;
         const cartTotal = (billing && billing.cartTotal) || {};
-        const amount =
-            cartTotal.value != null && cartTotal.value !== ''
-                ? String(cartTotal.value)
-                : '';
-        return { amount: amount, currency: String(currency || '') };
+        let amount = NaN;
+        if (cartTotal.value != null && cartTotal.value !== '') {
+            amount = minorToMajorAmount(cartTotal.value, minorUnit);
+        }
+        return {
+            amount: amount,
+            currency: String(currency || ''),
+            minorUnit: minorUnit,
+        };
     }
 
     /**
      * Session 仅在具备最小账单信息时创建一次；改地址/加优惠券都不重建。
-     * 金额与账单在支付时经 _getExtraParams（amount / bill）覆盖。
+     * 金额与账单在支付时经 _getExtraParams（trans_amount / bill）覆盖。
      */
     function sessionSignature(billing, shippingData) {
         const p = buildCheckoutPayload(billing, shippingData);
@@ -331,20 +358,25 @@
         // 下单支付：必须用用户输入邮箱覆盖 Create Session 的默认邮箱
         const email = resolveEnteredEmail(billing);
         const money = getCartAmountParts(billing);
-        let amountNum =
-            money.amount !== '' && money.amount != null ? parseInt(String(money.amount), 10) : NaN;
+        // 主路径：cartTotal.value 按 minorUnit 除回主单位
+        let amountNum = money.amount;
         let currency = money.currency || '';
-        if ((isNaN(amountNum) || money.amount === '') && sessionFallback && sessionFallback.amount != null) {
-            amountNum = parseInt(String(sessionFallback.amount), 10);
+        if ((isNaN(amountNum) || amountNum === null) && sessionFallback) {
+            if (sessionFallback.amount_major != null && sessionFallback.amount_major !== '') {
+                amountNum = Number(sessionFallback.amount_major);
+            } else if (sessionFallback.amount != null) {
+                amountNum = minorToMajorAmount(sessionFallback.amount, money.minorUnit);
+            }
         }
         if (!currency && sessionFallback && sessionFallback.currency) {
             currency = String(sessionFallback.currency);
         }
 
-        // 约定结构：currency / amount / bill；shipping 有真实地址才传
         const extras = {
-            currency: currency,
-            amount: !isNaN(amountNum) ? amountNum : 0,
+            trans_amount: {
+                amount: !isNaN(amountNum) ? amountNum : 0,
+                currency: currency,
+            },
             bill: buildPaykkaBillOrShipping(billAddr, email),
             customer: {
                 email: email,
@@ -542,7 +574,7 @@
                 env: data.env || settings.env || 'sandbox',
                 // 卡支付走 WC 下单按钮；钱包按钮由 Apple/Google 组件自身展示
                 hidePaymentButton: true,
-                // 支付时补齐 currency / amount / bill；（有收货时再带 shipping）
+                // 支付时补齐 trans_amount / bill；（有收货时再带 shipping）
                 _getExtraParams: function (type) {
                     if (type && type !== 'payment') {
                         return {};

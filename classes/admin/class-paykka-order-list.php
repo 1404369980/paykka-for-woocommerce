@@ -1,6 +1,9 @@
 <?php
 /**
- * 订单列表 / 订单详情展示 PayKKa 网关订单号（_paykka_order_id）。
+ * 订单列表 / 订单详情：
+ * - Payment Order：PayKKa 网关支付订单号（_paykka_order_id）
+ * - Merchant Transaction ID：发送给 PayKKa 的商户交易号 trans_id（_paykka_trans_id）
+ * Hosted（paykka）与 Payments（paykka-card）共用。
  */
 
 if (!defined('ABSPATH')) {
@@ -8,20 +11,17 @@ if (!defined('ABSPATH')) {
 }
 
 /**
- * 注册订单列表列（传统 CPT + HPOS）。
+ * 注册订单列表列（传统 CPT + HPOS）与订单详情展示。
  */
 function paykka_register_order_list_hooks()
 {
-    // 传统订单 CPT
     add_filter('manage_edit-shop_order_columns', 'paykka_add_order_list_column', 20);
     add_action('manage_shop_order_posts_custom_column', 'paykka_render_order_list_column_cpt', 20, 2);
 
-    // HPOS 订单列表
     add_filter('woocommerce_shop_order_list_table_columns', 'paykka_add_order_list_column', 20);
     add_action('woocommerce_shop_order_list_table_custom_column', 'paykka_render_order_list_column_hpos', 20, 2);
 
-    // 订单详情页
-    add_action('woocommerce_admin_order_data_after_billing_address', 'paykka_render_order_admin_gateway_id', 20);
+    add_action('woocommerce_admin_order_data_after_billing_address', 'paykka_render_order_admin_payment_ids', 20);
 }
 
 /**
@@ -33,15 +33,31 @@ function paykka_add_order_list_column($columns)
     $new = array();
     foreach ($columns as $key => $label) {
         $new[$key] = $label;
-        // 插在订单状态后；若无 status 则追加在末尾前一列
         if ($key === 'order_status') {
-            $new['paykka_order_id'] = __('PayKKa Order ID', 'paykka-for-woocommerce');
+            $new['paykka_order_id'] = __('Payment Order', 'paykka-for-woocommerce');
         }
     }
     if (!isset($new['paykka_order_id'])) {
-        $new['paykka_order_id'] = __('PayKKa Order ID', 'paykka-for-woocommerce');
+        $new['paykka_order_id'] = __('Payment Order', 'paykka-for-woocommerce');
     }
     return $new;
+}
+
+/**
+ * @param \WC_Order|false $order
+ * @return array{payment_order:string,merchant_trans_id:string}
+ */
+function paykka_get_payment_ids($order)
+{
+    $empty = array('payment_order' => '', 'merchant_trans_id' => '');
+    if (!$order || !is_a($order, 'WC_Order')) {
+        return $empty;
+    }
+    // _paykka_trans_id = Create Session / 支付请求里发给 PayKKa 的 merchant trans_id
+    return array(
+        'payment_order'     => trim((string) $order->get_meta('_paykka_order_id', true)),
+        'merchant_trans_id' => trim((string) $order->get_meta('_paykka_trans_id', true)),
+    );
 }
 
 /**
@@ -50,16 +66,11 @@ function paykka_add_order_list_column($columns)
  */
 function paykka_get_gateway_order_id_display($order)
 {
-    if (!$order || !is_a($order, 'WC_Order')) {
-        return '—';
-    }
-    $gw = trim((string) $order->get_meta('_paykka_order_id', true));
-    return $gw !== '' ? $gw : '—';
+    $ids = paykka_get_payment_ids($order);
+    return $ids['payment_order'] !== '' ? $ids['payment_order'] : '—';
 }
 
 /**
- * CPT 列内容。
- *
  * @param string $column
  * @param int    $post_id
  */
@@ -68,13 +79,10 @@ function paykka_render_order_list_column_cpt($column, $post_id)
     if ($column !== 'paykka_order_id') {
         return;
     }
-    $order = wc_get_order($post_id);
-    echo esc_html(paykka_get_gateway_order_id_display($order));
+    echo esc_html(paykka_get_gateway_order_id_display(wc_get_order($post_id)));
 }
 
 /**
- * HPOS 列内容。
- *
  * @param string    $column
  * @param \WC_Order $order
  */
@@ -87,21 +95,33 @@ function paykka_render_order_list_column_hpos($column, $order)
 }
 
 /**
- * 订单编辑页账单地址下方展示。
+ * 订单详情：Payment Order + Merchant Transaction ID（Hosted / Payments）。
  *
  * @param \WC_Order $order
  */
-function paykka_render_order_admin_gateway_id($order)
+function paykka_render_order_admin_payment_ids($order)
 {
     if (!$order || !is_a($order, 'WC_Order')) {
         return;
     }
-    $gw = trim((string) $order->get_meta('_paykka_order_id', true));
-    if ($gw === '') {
+
+    $ids = paykka_get_payment_ids($order);
+    if ($ids['payment_order'] === '' && $ids['merchant_trans_id'] === '') {
         return;
     }
-    echo '<p class="form-field form-field-wide paykka-admin-order-id">';
-    echo '<strong>' . esc_html__('PayKKa Order ID', 'paykka-for-woocommerce') . ':</strong> ';
-    echo '<code style="user-select:all;">' . esc_html($gw) . '</code>';
-    echo '</p>';
+
+    echo '<div class="paykka-admin-payment-ids" style="margin-top:8px;">';
+    if ($ids['payment_order'] !== '') {
+        echo '<p class="form-field form-field-wide" style="margin:0 0 6px;">';
+        echo '<strong>' . esc_html__('Payment Order', 'paykka-for-woocommerce') . ':</strong> ';
+        echo '<code style="user-select:all;">' . esc_html($ids['payment_order']) . '</code>';
+        echo '</p>';
+    }
+    if ($ids['merchant_trans_id'] !== '') {
+        echo '<p class="form-field form-field-wide" style="margin:0 0 6px;">';
+        echo '<strong>' . esc_html__('Merchant Transaction ID', 'paykka-for-woocommerce') . ':</strong> ';
+        echo '<code style="user-select:all;">' . esc_html($ids['merchant_trans_id']) . '</code>';
+        echo '</p>';
+    }
+    echo '</div>';
 }

@@ -26,7 +26,7 @@ final class WC_Gateway_Paykka_Card_Support extends AbstractPaymentMethodType
 
     public function get_payment_method_script_handles()
     {
-        $version = '1.5.23';
+        $version = '1.5.27';
         $checkout_url = function_exists('paykka_get_checkout_base_url') ? paykka_get_checkout_base_url() : '';
         $script_url   = rtrim($checkout_url, '/') . '/cp/card-checkout-ui.js';
         $style_url    = rtrim($checkout_url, '/') . '/cp/style.css';
@@ -71,12 +71,11 @@ final class WC_Gateway_Paykka_Card_Support extends AbstractPaymentMethodType
             $title = __('Payments', 'paykka-for-woocommerce');
         }
 
-        // Card 业务层：进入结账即生成 attempt_id（与 Hosted 无关）
+        // Blocks 结账脚本数据随页面加载；每次进页/刷新都换新雪花 ID。
+        // 同页 Create Session AJAX 走 get_or_create，复用 Session，不再 regenerate。
         $attempt_id = '';
         if (class_exists('Paykka_Card_Checkout_Service')) {
-            $attempt_id = Paykka_Card_Checkout_Service::get_or_create_attempt_id();
-        } elseif (function_exists('paykka_get_or_create_checkout_attempt_id')) {
-            $attempt_id = paykka_get_or_create_checkout_attempt_id();
+            $attempt_id = Paykka_Card_Checkout_Service::regenerate_attempt_id();
         }
 
         return array(

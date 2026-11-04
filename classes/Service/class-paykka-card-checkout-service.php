@@ -35,7 +35,39 @@ class Paykka_Card_Checkout_Service
     }
 
     /**
-     * 进入结账页时生成（或复用）Card 专用 attempt_id。
+     * 进入 / 刷新结账页：强制生成全新雪花 Attempt ID，并清空旧 Card Session 缓存。
+     * 同一 PHP 请求内只生成一次，避免 get_payment_method_data 被多次调用时连刷。
+     *
+     * @return string
+     */
+    public static function regenerate_attempt_id()
+    {
+        if (!function_exists('WC') || !WC()->session) {
+            return '';
+        }
+
+        static $request_id = null;
+        if (is_string($request_id) && $request_id !== '') {
+            return $request_id;
+        }
+
+        if (!class_exists('Paykka_Snowflake')) {
+            require_once PAYKKA_PLUGIN_PATH . 'classes/utils/class-paykka-snowflake.php';
+        }
+
+        $id = Paykka_Snowflake::next_id();
+        WC()->session->set(self::ATTEMPT_SESSION_KEY, $id);
+        WC()->session->__unset(self::SESSION_KEY);
+        WC()->session->__unset(self::ORDER_SESSION_KEY);
+        WC()->session->__unset('paykka_checkout_attempt_id');
+        WC()->session->save_data();
+
+        $request_id = $id;
+        return $id;
+    }
+
+    /**
+     * AJAX 等同页内复用 Session 中的 Attempt ID；缺失时再生成。
      *
      * @return string
      */
@@ -45,32 +77,23 @@ class Paykka_Card_Checkout_Service
             return '';
         }
         $id = WC()->session->get(self::ATTEMPT_SESSION_KEY);
-        if (!is_string($id) || $id === '') {
-            // 兼容旧 key（一次迁移）
-            $legacy = WC()->session->get('paykka_checkout_attempt_id');
-            if (is_string($legacy) && $legacy !== '') {
-                $id = $legacy;
-            } else {
-                $id = 'a' . substr(md5(uniqid('paykka_card', true)), 0, 16) . gmdate('His') . (string) wp_rand(10, 99);
-                $id = substr(preg_replace('/[^a-zA-Z0-9]/', '', $id), 0, 64);
-            }
-            WC()->session->set(self::ATTEMPT_SESSION_KEY, $id);
-            WC()->session->__unset('paykka_checkout_attempt_id');
-            WC()->session->save_data();
+        if (is_string($id) && $id !== '') {
+            return $id;
         }
-        return $id;
+        return self::regenerate_attempt_id();
     }
 
     /**
+     * Card 商户 trans_id：雪花 Attempt ID 本身已唯一，不再追加 c+时间戳。
+     *
      * @param string $attempt_id
      * @return string
      */
     public static function new_trans_id($attempt_id)
     {
-        $attempt_id = preg_replace('/[^a-zA-Z0-9]/', '', (string) $attempt_id);
-        $trans_id   = $attempt_id . 'c' . gmdate('YmdHis') . wp_rand(100, 999);
+        $trans_id = preg_replace('/[^a-zA-Z0-9]/', '', (string) $attempt_id);
         if (strlen($trans_id) > 64) {
-            $trans_id = substr($attempt_id . 'c' . substr(md5(uniqid($attempt_id, true)), 0, 12), 0, 64);
+            $trans_id = substr($trans_id, 0, 64);
         }
         return $trans_id;
     }
@@ -100,10 +123,11 @@ class Paykka_Card_Checkout_Service
             return $this->format_session_response($attempt_id, (string) $cached['session_id'], $cached);
         }
 
-        $trans_id = self::new_trans_id($attempt_id);
-        $amount   = $this->cart_amount_minor();
-        $currency = get_woocommerce_currency();
-        $return_url = PaykkaCallBackHandler::getCallbackUrlByAttempt($attempt_id);
+        $trans_id     = self::new_trans_id($attempt_id);
+        $amount       = $this->cart_amount_minor();
+        $amount_major = (float) WC()->cart->get_total('edit');
+        $currency     = get_woocommerce_currency();
+        $return_url   = PaykkaCallBackHandler::getCallbackUrlByAttempt($attempt_id);
 
         require_once PAYKKA_PLUGIN_PATH . 'classes/lib/Paykka/Request/PaykkaRequestHandler.php';
         $response = (new \lib\Paykka\Request\PaykkaRequestHandler())->createComponentSessionFromCart(array(
@@ -124,14 +148,15 @@ class Paykka_Card_Checkout_Service
 
         $session_id = sanitize_text_field((string) $response['data']['session_id']);
         $cache      = array(
-            'channel'     => self::CHANNEL,
-            'attempt_id'  => $attempt_id,
-            'trans_id'    => $trans_id,
-            'session_id'  => $session_id,
-            'fingerprint' => $fingerprint,
-            'amount'      => $amount,
-            'currency'    => $currency,
-            'return_url'  => $return_url,
+            'channel'      => self::CHANNEL,
+            'attempt_id'   => $attempt_id,
+            'trans_id'     => $trans_id,
+            'session_id'   => $session_id,
+            'fingerprint'  => $fingerprint,
+            'amount'       => $amount,
+            'amount_major' => $amount_major,
+            'currency'     => $currency,
+            'return_url'   => $return_url,
         );
         $this->set_session_cache($cache);
         self::remember_mapping($attempt_id, $trans_id, $session_id, 0);
@@ -366,6 +391,11 @@ class Paykka_Card_Checkout_Service
             $amount = $this->cart_amount_minor();
         }
         $currency   = !empty($cache['currency']) ? (string) $cache['currency'] : get_woocommerce_currency();
+        // 原始金额（主单位），供 _getExtraParams.trans_amount 使用，避免前端除法换算
+        $amount_major = isset($cache['amount_major']) ? (float) $cache['amount_major'] : 0.0;
+        if ($amount_major <= 0 && WC()->cart) {
+            $amount_major = (float) WC()->cart->get_total('edit');
+        }
         $return_url = !empty($cache['return_url'])
             ? (string) $cache['return_url']
             : PaykkaCallBackHandler::getCallbackUrlByAttempt($attempt_id);
@@ -378,6 +408,7 @@ class Paykka_Card_Checkout_Service
             'channel'       => self::CHANNEL,
             'order_id'      => 0,
             'amount'        => $amount,
+            'amount_major'  => $amount_major,
             'currency'      => $currency,
             'return_url'    => $return_url,
             'checkout_base' => function_exists('paykka_get_checkout_base_url') ? paykka_get_checkout_base_url() : '',

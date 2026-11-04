@@ -4,7 +4,7 @@
  * Plugin Name:       PayKKa for WooCommerce
  * Plugin URI:        https://github.com/1404369980/paykka-for-woocommerce
  * Description:       PayKKa Hosted 与 Embedded Payments（卡 / Apple Pay / Google Pay），支持 WooCommerce 结账与 Blocks。
- * Version:           1.5.23
+ * Version:           1.5.27
  * Author:            Fengqiao Yi
  * Author URI:        https://github.com/1404369980/paykka-for-woocommerce
  * License:           GNU General Public License v3.0
@@ -44,6 +44,7 @@ function woocommerce_paykka_init()
     }
     $base = plugin_dir_path(__FILE__);
     require_once $base . 'classes/utils/class-paykka-utils.php';
+    require_once $base . 'classes/utils/class-paykka-snowflake.php';
     require_once $base . 'classes/Service/class-paykka-card-checkout-service.php';
     require_once $base . 'classes/lib/Paykka/Request/PaykkaCallBackHandler.php';
     require_once $base . 'classes/lib/Paykka/Request/PaykkaWebHookHandler.php';
