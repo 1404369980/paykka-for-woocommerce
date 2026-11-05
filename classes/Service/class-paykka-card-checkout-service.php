@@ -37,17 +37,19 @@ class Paykka_Card_Checkout_Service
     /**
      * 进入 / 刷新结账页：强制生成全新雪花 Attempt ID，并清空旧 Card Session 缓存。
      * 同一 PHP 请求内只生成一次，避免 get_payment_method_data 被多次调用时连刷。
+     * $force=true：收银台过期/已结束时强制再发一个新 ID（绕过同请求缓存）。
      *
+     * @param bool $force
      * @return string
      */
-    public static function regenerate_attempt_id()
+    public static function regenerate_attempt_id($force = false)
     {
         if (!function_exists('WC') || !WC()->session) {
             return '';
         }
 
         static $request_id = null;
-        if (is_string($request_id) && $request_id !== '') {
+        if (!$force && is_string($request_id) && $request_id !== '') {
             return $request_id;
         }
 
@@ -113,7 +115,15 @@ class Paykka_Card_Checkout_Service
 
         WC()->cart->calculate_totals();
 
-        $attempt_id = self::get_or_create_attempt_id();
+        // force_new：已结束/过期的收银台不可再提交 → 换全新 attempt/trans/session；
+        // WC 订单仍只在 Place Order 时 bind_pending_order 写入（与既有流程一致）。
+        // 注意：set_session_cache() 会 unset ORDER_SESSION_KEY，pending 订单 ID 必须在缓存写入后再恢复。
+        $pending_order_id = absint(WC()->session->get(self::ORDER_SESSION_KEY));
+        if ($force_new) {
+            $attempt_id = self::regenerate_attempt_id(true);
+        } else {
+            $attempt_id = self::get_or_create_attempt_id();
+        }
         if ($attempt_id === '') {
             return new \WP_Error('paykka_attempt_missing', __('结账会话已过期，请刷新结账页后重试。', 'paykka-for-woocommerce'));
         }
@@ -161,6 +171,12 @@ class Paykka_Card_Checkout_Service
         );
         $this->set_session_cache($cache);
         self::remember_mapping($attempt_id, $trans_id, $session_id, 0);
+
+        // set_session_cache 会清 ORDER_SESSION_KEY；force_new 后恢复，Place Order 复用同一笔 pending 并写入新 attempt/session
+        if ($force_new && $pending_order_id > 0 && function_exists('WC') && WC()->session) {
+            WC()->session->set(self::ORDER_SESSION_KEY, $pending_order_id);
+            WC()->session->save_data();
+        }
 
         return $this->format_session_response($attempt_id, $session_id, $cache);
     }
@@ -484,11 +500,11 @@ class Paykka_Card_Checkout_Service
         }
 
         $order = $order_id ? wc_get_order($order_id) : null;
+        // 会话重建后 attempt_id 会变：仍复用同一笔 pending/failed 订单，下单时写入新 attempt/session
         $reuse = $order
             && $order->get_id()
             && $order->has_status(array('pending', 'failed'))
-            && $order->get_payment_method() === self::GATEWAY_ID
-            && (string) $order->get_meta('_paykka_attempt_id', true) === $attempt_id;
+            && $order->get_payment_method() === self::GATEWAY_ID;
 
         if (!$reuse) {
             $order = wc_create_order(array(

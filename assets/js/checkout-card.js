@@ -110,9 +110,9 @@
     function markPaymentFailed(text) {
         var url = config.failAjaxUrl;
         if (!url) {
-            return;
+            return $.Deferred().resolve({}).promise();
         }
-        $.ajax({
+        return $.ajax({
             url: url,
             type: 'POST',
             dataType: 'json',
@@ -120,7 +120,118 @@
                 security: config.nonce,
                 message: String(text || '').slice(0, 500)
             }
-        });
+        }).then(
+            function (json) {
+                return (json && json.success && json.data) || {};
+            },
+            function () {
+                return {};
+            }
+        );
+    }
+
+    var recoveringSession = false;
+
+    /**
+     * 解析 payments：收银台过期 / 5009 → 重建 Session（不标 failed）。
+     */
+    function analyzePaymentResponse(payload) {
+        var out = { status: '', orderStatus: '', code: '', message: '', needsNewSession: false };
+        if (!payload) {
+            return out;
+        }
+        var root = payload;
+        if (typeof root === 'string') {
+            try {
+                root = JSON.parse(root);
+            } catch (e) {
+                return out;
+            }
+        }
+        if (typeof root !== 'object') {
+            return out;
+        }
+        if (root.response && typeof root.response === 'object') {
+            root = root.response;
+        }
+        // SDK 回调多为 camelCase；原始 API 多为 snake_case
+        var data = root.data && typeof root.data === 'object' ? root.data : root;
+        out.status = data.status ? String(data.status).toUpperCase() : '';
+        out.orderStatus = String(data.order_status || data.orderStatus || '').toUpperCase();
+        var rawCode =
+            data.error_code != null
+                ? data.error_code
+                : data.errorCode != null
+                  ? data.errorCode
+                  : root.error_code != null
+                    ? root.error_code
+                    : root.errorCode != null
+                      ? root.errorCode
+                      : root.code != null
+                        ? root.code
+                        : '';
+        out.code = rawCode !== '' && rawCode != null ? String(rawCode) : '';
+        out.message =
+            data.error_description ||
+            data.errorDescription ||
+            data.errorMessage ||
+            root.error_description ||
+            root.errorDescription ||
+            root.errorMessage ||
+            data.msg ||
+            root.msg ||
+            (root.message && String(root.message).charAt(0) !== '{'
+                ? String(root.message)
+                : '') ||
+            '';
+        var msgLower = String(out.message || '').toLowerCase();
+        // 收银台过期 / 已结束不可重复提交 / 风控 5009：换新 attempt 重建 Session
+        if (
+            out.status === 'EXPIRED' ||
+            out.orderStatus === 'EXPIRED' ||
+            out.code === '4018' ||
+            out.code === '5009' ||
+            msgLower.indexOf('session is finished') !== -1 ||
+            msgLower.indexOf('duplicate submission') !== -1
+        ) {
+            out.needsNewSession = true;
+        }
+        return out;
+    }
+
+    function recoverMessage(analyzed) {
+        if (!analyzed || !analyzed.needsNewSession) {
+            return '';
+        }
+        // 优先使用接口返回描述，不自行改写
+        var apiMsg = analyzed.message ? String(analyzed.message).trim() : '';
+        if (apiMsg) {
+            return apiMsg;
+        }
+        return (config.i18n && config.i18n.error) || '';
+    }
+
+    /** EXPIRED / 5009：换新 attempt 重建收银台，不标 failed、不跳转。 */
+    function recoverCheckoutIfNeeded(payload) {
+        var analyzed = analyzePaymentResponse(payload);
+        if (!analyzed.needsNewSession) {
+            return false;
+        }
+        if (recoveringSession) {
+            return true;
+        }
+        recoveringSession = true;
+        paying = false;
+        cardReady = false;
+        var msg = recoverMessage(analyzed);
+        message('error', msg);
+        destroyCard();
+        lastSignature = '';
+        // 等旧 SDK 卸干净后再 force_new，避免新 Session 挂载失败/空白
+        setTimeout(function () {
+            requestSession({ forceNew: true });
+        }, 320);
+        return true;
     }
 
     function triggerPayment() {
@@ -164,7 +275,37 @@
             _envConfig: checkoutBase ? {
                 api: checkoutBase,
                 cdn: checkoutBase.replace(/\/$/, '') + '/cp'
-            } : undefined
+            } : undefined,
+            onEvent: function (eventName, payload) {
+                if (
+                    eventName === 'payment:response' ||
+                    eventName === 'afterPayment' ||
+                    (payload && payload.action === 'afterPayment')
+                ) {
+                    recoverCheckoutIfNeeded(
+                        payload && payload.response ? payload : payload
+                    );
+                }
+            },
+            onSubmitResponse: function (response) {
+                recoverCheckoutIfNeeded(response);
+            },
+            onFailure: function (payload) {
+                recoverCheckoutIfNeeded(payload || { errorCode: '5009' });
+            },
+            onExpired: function () {
+                recoverCheckoutIfNeeded({ status: 'EXPIRED' });
+            },
+            onError: function (error) {
+                if (recoverCheckoutIfNeeded(error)) {
+                    return;
+                }
+                paying = false;
+                var text =
+                    (error && (error.error_description || error.msg || error.message)) ||
+                    config.i18n.error;
+                message('error', text);
+            }
         });
 
         return checkout.init().then(function () {
@@ -183,37 +324,24 @@
                     }
                     window.location.href = returnUrl || data.return_url;
                 },
+                onSubmitResponse: function (response) {
+                    recoverCheckoutIfNeeded(response);
+                },
+                onFailure: function (payload) {
+                    recoverCheckoutIfNeeded(payload || { errorCode: '5009' });
+                },
                 onExpired: function () {
-                    paying = false;
-                    cardReady = false;
-                    message('error', config.i18n.error);
-                    markPaymentFailed(config.i18n.error);
+                    recoverCheckoutIfNeeded({ status: 'EXPIRED' });
                 },
                 onError: function (error) {
+                    if (recoverCheckoutIfNeeded(error)) {
+                        return;
+                    }
                     paying = false;
-                    var text = config.i18n.error;
-                    if (error) {
-                        if (error.msg) {
-                            text = String(error.msg);
-                        } else if (error.message) {
-                            text = String(error.message);
-                            if (text.charAt(0) === '{') {
-                                try {
-                                    var parsed = JSON.parse(text);
-                                    if (parsed && (parsed.msg || parsed.message)) {
-                                        text = String(parsed.msg || parsed.message);
-                                    }
-                                } catch (ignore) {
-                                    // keep text
-                                }
-                            }
-                        }
-                    }
+                    var text =
+                        (error && (error.error_description || error.msg || error.message)) ||
+                        config.i18n.error;
                     message('error', text);
-                    markPaymentFailed(text);
-                    if (typeof window.jQuery !== 'undefined') {
-                        $(document.body).trigger('checkout_error');
-                    }
                 }
             });
             cardInstance.mount(container()[0]);
@@ -222,12 +350,18 @@
         });
     }
 
-    function requestSession() {
+    function requestSession(opts) {
         if (!selectedCard() || !container().length) {
             destroyCard();
+            recoveringSession = false;
             return;
         }
 
+        var forceNew = !!(opts && opts.forceNew);
+        // 重建中禁止普通拉 Session 抢跑
+        if (!forceNew && recoveringSession) {
+            return;
+        }
         var $form = $('form.checkout');
         var serialized = $form.serialize();
         var signature = serialized;
@@ -238,7 +372,7 @@
                 fields[decodeURIComponent(pair[0].replace(/\+/g, ' '))] = pair[1] || '';
             }
         });
-        if (signature === lastSignature && cardInstance && cardReady) {
+        if (!forceNew && signature === lastSignature && cardInstance && cardReady) {
             return;
         }
         lastSignature = signature;
@@ -249,15 +383,19 @@
         }
         destroyCard();
         message('ready', config.i18n.loading);
+        var ajaxData = {
+            security: config.nonce,
+            post_data: serialized,
+            payment_method: gatewayId
+        };
+        if (forceNew) {
+            ajaxData.force_new = '1';
+        }
         request = $.ajax({
             url: config.ajaxUrl,
             type: 'POST',
             dataType: 'json',
-            data: {
-                security: config.nonce,
-                post_data: serialized,
-                payment_method: gatewayId
-            }
+            data: ajaxData
         }).then(function (response) {
             if (currentRequest !== requestNumber) {
                 return;
@@ -268,17 +406,34 @@
             return loadSdk().then(function () {
                 return createCard(response.data);
             });
+        }).then(function () {
+            if (currentRequest !== requestNumber) {
+                return;
+            }
+            recoveringSession = false;
+            if (cardReady && cardInstance && container().length) {
+                message('ready', config.i18n.ready);
+            }
         }).catch(function (error) {
-            if (currentRequest !== requestNumber || (error && error.statusText === 'abort')) {
+            // 被更新请求 abort：由新请求负责清 recoveringSession
+            if (currentRequest !== requestNumber) {
+                return;
+            }
+            if (error && error.statusText === 'abort') {
+                recoveringSession = false;
                 return;
             }
             cardInstance = null;
             cardReady = false;
+            recoveringSession = false;
             message('error', error && error.message ? error.message : config.i18n.error);
         });
     }
 
     function scheduleRequest() {
+        if (recoveringSession) {
+            return;
+        }
         clearTimeout(initTimer);
         initTimer = setTimeout(requestSession, 200);
     }

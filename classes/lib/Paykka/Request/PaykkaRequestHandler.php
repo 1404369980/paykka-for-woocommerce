@@ -741,6 +741,27 @@ class PaykkaRequestHandler
             $status = strtoupper((string) $query_result['data']['status']);
         }
 
+        $order_status = '';
+        if (!empty($query_result['order_status'])) {
+            $order_status = strtoupper((string) $query_result['order_status']);
+        } elseif (!empty($query_result['data']['order_status'])) {
+            $order_status = strtoupper((string) $query_result['data']['order_status']);
+        }
+
+        $error_code = '';
+        if (!empty($query_result['error_code'])) {
+            $error_code = (string) $query_result['error_code'];
+        } elseif (!empty($query_result['data']['error_code'])) {
+            $error_code = (string) $query_result['data']['error_code'];
+        }
+
+        $error_description = '';
+        if (!empty($query_result['error_description'])) {
+            $error_description = (string) $query_result['error_description'];
+        } elseif (!empty($query_result['data']['error_description'])) {
+            $error_description = (string) $query_result['data']['error_description'];
+        }
+
         $paykka_order_id = '';
         if (!empty($query_result['order_id'])) {
             $paykka_order_id = (string) $query_result['order_id'];
@@ -750,6 +771,58 @@ class PaykkaRequestHandler
         if ($paykka_order_id !== '') {
             $order->update_meta_data('_paykka_order_id', sanitize_text_field($paykka_order_id));
         }
+
+        $fail_suffix = '';
+        if ($error_code !== '') {
+            $fail_suffix .= ' error_code=' . $error_code;
+        }
+        if ($error_description !== '') {
+            $fail_suffix .= ' ' . $error_description;
+        }
+        if ($source !== '') {
+            $fail_suffix .= ' (' . $source . ')';
+        }
+
+        // 收银台过期 / 5009：前端重建 Session，这里只记备注，不把 WC 订单标 failed
+        $recover_session =
+            $status === 'EXPIRED'
+            || $order_status === 'EXPIRED'
+            || $error_code === '4018'
+            || $error_code === '5009';
+        if ($recover_session) {
+            $order->add_order_note(
+                'PayKKa recoverable checkout issue:' . $fail_suffix .
+                ' (session will be recreated at checkout; WC order not marked failed)'
+            );
+            $order->save();
+            return;
+        }
+
+        // 其它明确失败码：即使 status 缺失也标 failed
+        $hard_fail_codes = array(
+            '5008', // 发卡行出于安全原因拒绝
+            '5002', // 发卡行未批准
+            '5019', // 命中黑名单
+            '5020', // 3DS 被拒绝
+            '5022', // 交易被拒绝
+            '5023', // 3DS 失败
+            '5024', // 3DS 过期
+            '4019', // 支付已取消
+            '4026', // 支付失败
+        );
+        if (
+            in_array($order_status, array('FAILURE', 'CANCELED'), true)
+            || ($error_code !== '' && in_array($error_code, $hard_fail_codes, true))
+        ) {
+            if ($order_status === 'CANCELED' || $error_code === '4019') {
+                $status = 'CANCELED';
+            } else {
+                $status = 'FAILURE';
+            }
+        } elseif ($status === '' && $error_code !== '' && in_array($error_code, $hard_fail_codes, true)) {
+            $status = 'FAILURE';
+        }
+
         switch ($status) {
             case 'SUCCESS':
                 $order->update_meta_data('_paykka_component_paid', 'yes');
@@ -773,10 +846,14 @@ class PaykkaRequestHandler
                 }
                 break;
             case 'FAILURE':
-                $order->update_status('failed', 'PayKKa status: FAILURE');
+                $order->update_status('failed', 'PayKKa status: FAILURE' . $fail_suffix);
+                break;
+            case 'EXPIRED':
+                // 收银台过期：仅备注（前端重建 Session）
+                $order->add_order_note('PayKKa status: EXPIRED' . $fail_suffix);
                 break;
             case 'CANCELED':
-                $order->update_status('cancelled', 'PayKKa status: CANCELED');
+                $order->update_status('cancelled', 'PayKKa status: CANCELED' . $fail_suffix);
                 break;
             case 'REFUNDED':
                 $order->update_status('refunded', 'PayKKa status: REFUNDED');

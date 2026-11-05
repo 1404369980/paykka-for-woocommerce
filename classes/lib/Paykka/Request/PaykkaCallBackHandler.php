@@ -71,12 +71,49 @@ class PaykkaCallBackHandler
                 $this->finish_success($order);
             }
 
-            if (function_exists('wc_add_notice')) {
-                if ($status === 'FAILURE' || $status === 'CANCELED') {
-                    wc_add_notice(__('支付未成功，请重试或更换支付方式。', 'paykka-for-woocommerce'), 'error');
-                } else {
-                    wc_add_notice(__('支付结果确认中，请稍候刷新或联系客服。', 'paykka-for-woocommerce'), 'notice');
+            $error_code = '';
+            if (!empty($query_result['error_code'])) {
+                $error_code = (string) $query_result['error_code'];
+            } elseif (!empty($query_result['data']['error_code'])) {
+                $error_code = (string) $query_result['data']['error_code'];
+            }
+
+            // 收银台过期 / 5009：不走失败页，回结账由前端重建 Session；文案用接口返回描述
+            $recover = ($status === 'EXPIRED' || $error_code === '4018' || $error_code === '5009');
+            if ($recover) {
+                if (function_exists('wc_add_notice')) {
+                    $api_msg = '';
+                    foreach (array(
+                        array($query_result, 'error_description'),
+                        array($query_result, 'error_msg'),
+                        array($query_result, 'ret_msg'),
+                        array(isset($query_result['data']) && is_array($query_result['data']) ? $query_result['data'] : array(), 'error_description'),
+                        array(isset($query_result['data']) && is_array($query_result['data']) ? $query_result['data'] : array(), 'error_msg'),
+                        array(isset($query_result['data']) && is_array($query_result['data']) ? $query_result['data'] : array(), 'msg'),
+                    ) as $pair) {
+                        $src = $pair[0];
+                        $key = $pair[1];
+                        if (!empty($src[$key]) && is_scalar($src[$key])) {
+                            $api_msg = wp_strip_all_tags((string) $src[$key]);
+                            break;
+                        }
+                    }
+                    if ($api_msg !== '') {
+                        wc_add_notice($api_msg, 'notice');
+                    }
                 }
+                $this->redirect_checkout();
+            }
+
+            if (in_array($status, array('FAILURE', 'CANCELED'), true)) {
+                $this->finish_failure(
+                    $order,
+                    __('支付未成功，请重试或更换支付方式。', 'paykka-for-woocommerce')
+                );
+            }
+
+            if (function_exists('wc_add_notice')) {
+                wc_add_notice(__('支付结果确认中，请稍候刷新或联系客服。', 'paykka-for-woocommerce'), 'notice');
             }
             $this->redirect_checkout();
         }
@@ -118,6 +155,27 @@ class PaykkaCallBackHandler
             paykka_clear_checkout_attempt_session();
         }
         wp_safe_redirect($order->get_checkout_order_received_url());
+        exit;
+    }
+
+    /**
+     * FAILURE / CANCELED：跳转订单结果页（失败态）。
+     * 注：EXPIRED / 5009 不走此路径，回结账重建收银台。
+     *
+     * @param \WC_Order $order
+     * @param string    $message
+     */
+    private function finish_failure($order, $message = '')
+    {
+        if ($message !== '' && function_exists('wc_add_notice')) {
+            wc_add_notice($message, 'error');
+        }
+        if ($order && $order->get_payment_method() === 'paykka-card' && function_exists('paykka_clear_checkout_attempt_session')) {
+            paykka_clear_checkout_attempt_session();
+        }
+        $url = $order->get_checkout_order_received_url();
+        $url = add_query_arg('paykka_result', 'failed', $url);
+        wp_safe_redirect($url);
         exit;
     }
 

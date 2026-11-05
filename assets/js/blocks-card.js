@@ -32,6 +32,7 @@
         payResolver: null,
         payTimer: null,
         skipSubmitNote: false,
+        recoveringSession: false,
     };
 
     function ensureParking() {
@@ -141,6 +142,50 @@
         }
     }
 
+    /**
+     * 5009/过期重建后：把组件从 parking 拉回可见容器（refs 可能尚未就绪）。
+     */
+    function scheduleAttachVisible(getEls, onDone) {
+        let attempt = 0;
+        const max = 8;
+        const tick = function () {
+            attempt += 1;
+            const els = typeof getEls === 'function' ? getEls() : null;
+            const ok =
+                els &&
+                attachAll(
+                    els.apple || null,
+                    els.google || null,
+                    els.card || null
+                );
+            if (ok) {
+                if (typeof onDone === 'function') {
+                    onDone(true);
+                }
+                return;
+            }
+            if (attempt < max) {
+                setTimeout(tick, 60 * attempt);
+                return;
+            }
+            if (typeof onDone === 'function') {
+                onDone(false);
+            }
+        };
+        tick();
+    }
+
+    function clearMountDom(el) {
+        if (!el) {
+            return;
+        }
+        try {
+            el.innerHTML = '';
+        } catch (e) {
+            // ignore
+        }
+    }
+
     function normalizeMethodCodes(methods) {
         if (!Array.isArray(methods)) {
             return [];
@@ -224,11 +269,12 @@
 
     /**
      * 收银台支付失败 → 将已绑定 WC 订单标为 failed。
+     * @return {Promise<{order_id?:number,status?:string,redirect?:string}>}
      */
     function markPaymentFailed(message) {
         const url = settings.failAjaxUrl;
         if (!url) {
-            return Promise.resolve();
+            return Promise.resolve({});
         }
         const body = new URLSearchParams();
         body.set('security', settings.nonce || '');
@@ -242,9 +288,111 @@
                 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
             },
             body: body.toString(),
-        }).catch(function () {
-            // 失败标记为最佳努力，不阻断前端错误展示
-        });
+        })
+            .then(function (res) {
+                return res.json();
+            })
+            .then(function (json) {
+                if (json && json.success && json.data) {
+                    return json.data;
+                }
+                return {};
+            })
+            .catch(function () {
+                return {};
+            });
+    }
+
+    /**
+     * 解析 /session/payments 响应。
+     * needsNewSession：收银台过期 / 5009 → 重建 Session，不标 failed、不跳转。
+     */
+    function analyzePaymentResponse(payload) {
+        const out = {
+            status: '',
+            orderStatus: '',
+            code: '',
+            message: '',
+            needsNewSession: false,
+        };
+        if (!payload) {
+            return out;
+        }
+        let root = payload;
+        if (typeof root === 'string') {
+            try {
+                root = JSON.parse(root);
+            } catch (e) {
+                return out;
+            }
+        }
+        if (typeof root !== 'object') {
+            return out;
+        }
+        if (root.response && typeof root.response === 'object') {
+            root = root.response;
+        }
+        // SDK onSubmitResponse 传 camelCase（errorCode/orderStatus）；
+        // 原始 API / afterPayment 可能仍是 snake_case 或包在 data 里。
+        const data =
+            root.data && typeof root.data === 'object' ? root.data : root;
+
+        out.status = data.status ? String(data.status).toUpperCase() : '';
+        out.orderStatus = String(
+            data.order_status || data.orderStatus || ''
+        ).toUpperCase();
+        const rawCode =
+            data.error_code != null
+                ? data.error_code
+                : data.errorCode != null
+                  ? data.errorCode
+                  : root.error_code != null
+                    ? root.error_code
+                    : root.errorCode != null
+                      ? root.errorCode
+                      : root.code != null
+                        ? root.code
+                        : '';
+        out.code = rawCode !== '' && rawCode != null ? String(rawCode) : '';
+        out.message =
+            data.error_description ||
+            data.errorDescription ||
+            data.errorMessage ||
+            root.error_description ||
+            root.errorDescription ||
+            root.errorMessage ||
+            data.msg ||
+            root.msg ||
+            (root.message && String(root.message).charAt(0) !== '{'
+                ? String(root.message)
+                : '') ||
+            '';
+
+        const msgLower = String(out.message || '').toLowerCase();
+        // 收银台过期 / 已结束不可重复提交 / 风控 5009：换新 attempt 重建 Session
+        if (
+            out.status === 'EXPIRED' ||
+            out.orderStatus === 'EXPIRED' ||
+            out.code === '4018' ||
+            out.code === '5009' ||
+            msgLower.indexOf('session is finished') !== -1 ||
+            msgLower.indexOf('duplicate submission') !== -1
+        ) {
+            out.needsNewSession = true;
+        }
+        return out;
+    }
+
+    function buildRecoverMessage(analyzed) {
+        if (!analyzed || !analyzed.needsNewSession) {
+            return '';
+        }
+        // 优先使用接口返回描述，不自行改写
+        const apiMsg = analyzed.message ? String(analyzed.message).trim() : '';
+        if (apiMsg) {
+            return apiMsg;
+        }
+        return i18n.error || '';
     }
 
     function mapBlocksAddress(prefix, address) {
@@ -508,46 +656,78 @@
         return '';
     }
 
-    function formatPaykkaError(err, fallback) {
-        const fb = fallback || i18n.error || 'Payment failed';
+    /** 解析 SDK /session/payments 业务异常（含 error_code、status）。 */
+    function parsePaykkaErrorInfo(err) {
+        const info = { message: '', code: '', status: '' };
         if (!err) {
-            return fb;
+            return info;
         }
+
+        const applyObj = function (obj) {
+            if (!obj || typeof obj !== 'object') {
+                return;
+            }
+            if (obj.error_code != null) {
+                info.code = String(obj.error_code);
+            } else if (obj.code != null && !info.code) {
+                info.code = String(obj.code);
+            }
+            if (obj.status != null) {
+                info.status = String(obj.status).toUpperCase();
+            }
+            if (obj.error_description) {
+                info.message = String(obj.error_description);
+            } else if (obj.msg) {
+                info.message = String(obj.msg);
+            } else if (obj.message && String(obj.message).charAt(0) !== '{') {
+                info.message = String(obj.message);
+            }
+            if (obj.data && typeof obj.data === 'object') {
+                applyObj(obj.data);
+            }
+        };
+
         if (typeof err === 'string') {
             const trimmed = err.trim();
             if (trimmed.charAt(0) === '{') {
                 try {
-                    const parsed = JSON.parse(trimmed);
-                    if (parsed && (parsed.msg || parsed.message)) {
-                        return String(parsed.msg || parsed.message);
-                    }
+                    applyObj(JSON.parse(trimmed));
                 } catch (e) {
-                    // ignore
+                    info.message = err;
                 }
+            } else {
+                info.message = err;
             }
-            return err;
+            return info;
         }
+
         if (typeof err === 'object') {
-            if (err.msg) {
-                return String(err.msg);
-            }
-            if (err.message) {
+            applyObj(err);
+            if (!info.message && err.message) {
                 const m = String(err.message).trim();
                 if (m.charAt(0) === '{') {
                     try {
-                        const parsed = JSON.parse(m);
-                        if (parsed && (parsed.msg || parsed.message)) {
-                            return String(parsed.msg || parsed.message);
-                        }
+                        applyObj(JSON.parse(m));
                     } catch (e) {
-                        // ignore
+                        info.message = m;
                     }
+                } else if (!info.message) {
+                    info.message = m;
                 }
-                return m;
             }
-            if (err.code && err.type) {
-                return fb;
-            }
+        }
+        return info;
+    }
+
+    function formatPaykkaError(err, fallback) {
+        const fb = fallback || i18n.error || 'Payment failed';
+        const analyzed = analyzePaymentResponse(err);
+        if (analyzed.needsNewSession) {
+            return buildRecoverMessage(analyzed) || fb;
+        }
+        const info = parsePaykkaErrorInfo(err);
+        if (info.message) {
+            return info.message;
         }
         return fb;
     }
@@ -625,6 +805,9 @@
             }
 
             destroyCachedCard();
+            clearMountDom(mountRef.current);
+            clearMountDom(appleRef.current);
+            clearMountDom(googleRef.current);
 
             // 与 classic checkout-card.js 一致：必须带 _envConfig，
             // 否则支付 hidden iframe 可能落在商户域，postMessage 目标源不匹配导致一直转圈。
@@ -636,6 +819,98 @@
                       cdn: checkoutBase.replace(/\/$/, '') + '/cp',
                   }
                 : undefined;
+
+            // 同一次 createCard 内 onInitError 最多再 force_new 一次；触发后本轮 createCard 必须中止
+            let initRetryUsed = false;
+            let createAborted = false;
+
+            /**
+             * 收银台过期 / 5009：结束本次 WC 等待，重建 Session（不标 failed、不跳转）。
+             * @return {boolean} 是否已按可恢复错误处理
+             */
+            function recoverCheckoutIfNeeded(payload) {
+                const analyzed = analyzePaymentResponse(payload);
+                if (!analyzed.needsNewSession) {
+                    return false;
+                }
+                if (cardCache.recoveringSession) {
+                    return true;
+                }
+                cardCache.recoveringSession = true;
+
+                const msg = buildRecoverMessage(analyzed);
+                if (cardCache.payTimer) {
+                    clearTimeout(cardCache.payTimer);
+                    cardCache.payTimer = null;
+                }
+                if (cardCache.payResolver) {
+                    cardCache.payResolver({
+                        ok: false,
+                        message: msg,
+                        markFailed: false,
+                    });
+                    cardCache.payResolver = null;
+                }
+                cardCache.skipSubmitNote = false;
+
+                // 提示风控/过期，同时进入 loading；成功挂载后会清掉
+                setError(msg);
+                setStatus(i18n.loading || 'Loading…');
+                setReady(false);
+
+                destroyCachedCard();
+                clearMountDom(mountRef.current);
+                clearMountDom(appleRef.current);
+                clearMountDom(googleRef.current);
+                // 防止 useEffect 用旧 signature 又拉回旧 Session
+                cardCache.signature = 'recover-' + String(Date.now());
+                retryNewSessionRef.current = true;
+
+                if (typeof requestFreshSession !== 'function') {
+                    cardCache.recoveringSession = false;
+                    retryNewSessionRef.current = false;
+                    return true;
+                }
+
+                const finishRecover = function (ok) {
+                    cardCache.recoveringSession = false;
+                    retryNewSessionRef.current = false;
+                    if (ok) {
+                        setReady(true);
+                        setError('');
+                        setStatus('');
+                    }
+                };
+
+                // 等旧 SDK iframe / postMessage 卸干净，再拿新 attempt 建 Session
+                setTimeout(function () {
+                    Promise.resolve(requestFreshSession({ forceNew: true }))
+                        .then(function () {
+                            return new Promise(function (resolve) {
+                                scheduleAttachVisible(
+                                    function () {
+                                        return {
+                                            apple: appleRef.current,
+                                            google: googleRef.current,
+                                            card: mountRef.current,
+                                        };
+                                    },
+                                    function (ok) {
+                                        resolve(!!ok);
+                                    }
+                                );
+                            });
+                        })
+                        .then(function (ok) {
+                            finishRecover(ok);
+                        })
+                        .catch(function () {
+                            /* requestSession 内部已 setError */
+                            finishRecover(false);
+                        });
+                }, 320);
+                return true;
+            }
 
             const checkout = new sdk.PayKKaCheckout({
                 sessionId: data.session_id,
@@ -656,12 +931,42 @@
                     cardCache.readyMethods = normalizeMethodCodes(methods);
                 },
                 onInitError: function (err) {
-                    if (!retryNewSessionRef.current && typeof requestFreshSession === 'function') {
+                    // 重建后偶发 init 打不开：中止本轮挂载，再换新 session 试一次
+                    if (!initRetryUsed && typeof requestFreshSession === 'function') {
+                        initRetryUsed = true;
+                        createAborted = true;
                         retryNewSessionRef.current = true;
                         destroyCachedCard();
-                        requestFreshSession({ forceNew: true });
+                        clearMountDom(mountRef.current);
+                        setStatus(i18n.loading || 'Loading…');
+                        setTimeout(function () {
+                            Promise.resolve(requestFreshSession({ forceNew: true }))
+                                .then(function () {
+                                    scheduleAttachVisible(
+                                        function () {
+                                            return {
+                                                apple: appleRef.current,
+                                                google: googleRef.current,
+                                                card: mountRef.current,
+                                            };
+                                        },
+                                        function (ok) {
+                                            retryNewSessionRef.current = false;
+                                            if (ok) {
+                                                setReady(true);
+                                                setError('');
+                                                setStatus('');
+                                            }
+                                        }
+                                    );
+                                })
+                                .catch(function () {
+                                    retryNewSessionRef.current = false;
+                                });
+                        }, 320);
                         return;
                     }
+                    createAborted = true;
                     const message = formatPaykkaError(err, i18n.error || 'Init error');
                     setReady(false);
                     setError(message);
@@ -716,33 +1021,36 @@
                         '/';
                     window.location.href = returnUrl;
                 },
-                onExpired: function () {
-                    if (!retryNewSessionRef.current && typeof requestFreshSession === 'function') {
-                        retryNewSessionRef.current = true;
-                        destroyCachedCard();
-                        requestFreshSession({ forceNew: true });
-                        return;
-                    }
-                    const expiredMsg = i18n.error || 'Session expired';
-                    setReady(false);
-                    setError(expiredMsg);
-                    setStatus('');
-                    // Session 过期：订单保持 pending，便于换新 Session 重试；不标 failed
-                    if (cardCache.payResolver) {
-                        cardCache.payResolver({
-                            ok: false,
-                            message: expiredMsg,
-                            markFailed: false,
-                        });
-                        cardCache.payResolver = null;
+                onEvent: function (eventName, payload) {
+                    if (
+                        eventName === 'payment:response' ||
+                        eventName === 'afterPayment' ||
+                        (payload && payload.action === 'afterPayment')
+                    ) {
+                        recoverCheckoutIfNeeded(
+                            payload && payload.response ? payload : payload
+                        );
                     }
                 },
+                onSubmitResponse: function (response) {
+                    // EXPIRED / 5009：重建收银台，不标 failed
+                    // 注意：SDK 传入对象为 camelCase（errorCode / orderStatus）
+                    recoverCheckoutIfNeeded(response);
+                },
+                // status=PROCESSING + orderStatus=FAILURE 时 SDK 走 onFailure → 再转 onError
+                onFailure: function (payload) {
+                    recoverCheckoutIfNeeded(payload || { errorCode: '5009' });
+                },
+                onExpired: function () {
+                    recoverCheckoutIfNeeded({ status: 'EXPIRED' });
+                },
                 onError: function (err) {
+                    if (recoverCheckoutIfNeeded(err)) {
+                        return;
+                    }
                     const message = formatPaykkaError(err, i18n.error || 'Payment failed');
                     setError(message);
                     setStatus(i18n.ready || 'Ready');
-                    // 仅 SDK 明确支付失败时标 failed
-                    markPaymentFailed(message);
                     if (cardCache.payResolver) {
                         cardCache.payResolver({
                             ok: false,
@@ -756,7 +1064,6 @@
                     const message = i18n.payTimeout || i18n.error || 'Payment timeout';
                     setError(message);
                     setStatus(i18n.ready || 'Ready');
-                    markPaymentFailed(message);
                     if (cardCache.payResolver) {
                         cardCache.payResolver({
                             ok: false,
@@ -769,6 +1076,11 @@
             });
 
             await checkout.init();
+
+            // onInitError 已触发 force_new：勿继续在已销毁的 checkout 上 create/mount
+            if (createAborted) {
+                throw new Error('PayKKa checkout init aborted');
+            }
 
             const codes = cardCache.readyMethods.length
                 ? cardCache.readyMethods
@@ -818,8 +1130,9 @@
             };
 
             const card = checkout.create(sdk.Card, cardOpts);
-            // 优先挂到可见容器；ref 尚未就绪时先挂 parking，随后由 useLayoutEffect 拉回
+            // 优先挂到可见容器；ref 尚未就绪时先挂 parking，随后拉回
             card.mount(mountRef.current || parking);
+            card.__paykkaMountEl = mountRef.current || parking;
 
             cardCache.checkout = checkout;
             cardCache.card = card;
@@ -828,10 +1141,30 @@
             retryNewSessionRef.current = false;
 
             const attached = attachAll(appleRef.current, googleRef.current, mountRef.current);
-            setReady(true);
-            setError('');
-            // 表单已就绪时不展示 “Ready”，对齐 WC / Stripe：直接露出输入框
-            setStatus(attached || mountRef.current ? '' : i18n.loading || 'Loading…');
+            if (attached || mountRef.current) {
+                setReady(true);
+                setError('');
+                setStatus('');
+            } else {
+                setReady(false);
+                setStatus(i18n.loading || 'Loading…');
+                scheduleAttachVisible(
+                    function () {
+                        return {
+                            apple: appleRef.current,
+                            google: googleRef.current,
+                            card: mountRef.current,
+                        };
+                    },
+                    function (ok) {
+                        if (ok) {
+                            setReady(true);
+                            setError('');
+                            setStatus('');
+                        }
+                    }
+                );
+            }
         }, []);
 
         const requestSession = useCallback(
@@ -839,6 +1172,11 @@
                 const forceNew = !!(opts && opts.forceNew);
                 const sig = sessionSignature(billingRef.current, shippingRef.current);
                 const payload = buildCheckoutPayload(billingRef.current, shippingRef.current);
+
+                // 重建中禁止普通 Session 请求抢跑（会导致新表单空白）
+                if (!forceNew && cardCache.recoveringSession) {
+                    return;
+                }
 
                 // 选中即可创建 Session，不要求先填邮箱/国家（支付时再经 _getExtraParams 覆盖）
                 if (!forceNew && restoreCached(sig)) {
@@ -910,6 +1248,13 @@
                     if (seq !== requestSeq.current) {
                         return;
                     }
+                    // init 主动中止并已另起 force_new：不覆盖 loading / 不二次 destroy
+                    if (
+                        err &&
+                        err.message === 'PayKKa checkout init aborted'
+                    ) {
+                        return;
+                    }
                     destroyCachedCard();
                     setReady(false);
                     setStatus('');
@@ -954,11 +1299,19 @@
                     return undefined;
                 }
 
+                // 5009/过期重建中：禁止再用 forceNew:false 抢跑，避免打不开新 Session
+                if (cardCache.recoveringSession || retryNewSessionRef.current) {
+                    return undefined;
+                }
+
                 if (restoreCached(sig)) {
                     return undefined;
                 }
 
                 const timer = setTimeout(function () {
+                    if (cardCache.recoveringSession || retryNewSessionRef.current) {
+                        return;
+                    }
                     requestSession({ forceNew: false });
                 }, 200);
                 return function () {
