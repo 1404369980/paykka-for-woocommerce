@@ -253,7 +253,7 @@ class Paykka_Credit_Card_Gateway extends WC_Payment_Gateway
                         'default' => 'eu',
                         'options' => array(
                             'eu' => __('欧洲地区 (https://openapi.eu.paykka.com)', 'paykka-for-woocommerce'),
-                            'hk' => __('香港地区 (https://openapi.aq.paykka.com)', 'paykka-for-woocommerce'),
+                            'hk' => __('香港地区 (https://openapi.paykka.com)', 'paykka-for-woocommerce'),
                         ),
                         'desc_tip' => true,
                         'description' => __('生产环境下后端 API 调用使用的区域。欧洲与香港使用不同域名，请与 Paykka 账户所在区域一致。', 'paykka-for-woocommerce'),

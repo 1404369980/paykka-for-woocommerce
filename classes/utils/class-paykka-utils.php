@@ -104,7 +104,7 @@ function paykka_is_sandbox()
 
 // API 地址：
 // 欧洲（生产）：https://openapi.eu.paykka.com
-// 香港（生产）：https://openapi.aq.paykka.com
+// 香港（生产）：https://openapi.paykka.com
 // 沙箱（测试）：https://openapi-sandbox.paykka.com
 if (!defined('PAYKKA_API_BASE_SANDBOX')) {
     define('PAYKKA_API_BASE_SANDBOX', 'https://openapi-sandbox.paykka.com');
@@ -113,7 +113,7 @@ if (!defined('PAYKKA_API_BASE_EU_PROD')) {
     define('PAYKKA_API_BASE_EU_PROD', 'https://openapi.eu.paykka.com');
 }
 if (!defined('PAYKKA_API_BASE_HK_PROD')) {
-    define('PAYKKA_API_BASE_HK_PROD', 'https://openapi.aq.paykka.com');
+    define('PAYKKA_API_BASE_HK_PROD', 'https://openapi.paykka.com');
 }
 // 兼容旧常量名（历史 AP 视为香港）
 if (!defined('PAYKKA_API_BASE_AP_PROD')) {
