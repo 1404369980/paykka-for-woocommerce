@@ -63,7 +63,7 @@ final class WC_Gateway_Paykka_Card_Support extends AbstractPaymentMethodType
         $settings = function_exists('getPaykkaSettings') ? getPaykkaSettings() : array();
         $env      = function_exists('paykka_is_sandbox') && paykka_is_sandbox()
             ? 'sandbox'
-            : (get_option('paykka_api_region', 'eu') === 'hk' ? 'hk' : 'eu');
+            : (get_option('paykka_api_region', 'hk') === 'eu' ? 'eu' : 'hk');
         $checkout_url = function_exists('paykka_get_checkout_base_url') ? paykka_get_checkout_base_url() : '';
 
         $title = isset($this->settings['title']) ? (string) $this->settings['title'] : '';

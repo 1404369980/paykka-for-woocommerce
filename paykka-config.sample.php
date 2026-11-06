@@ -16,7 +16,7 @@ return array(
 
     // 生产环境地址（仅当 env=production 且未在后台填写时，此处生效）
     'production' => array(
-        'api_base_url'      => 'https://openapi.eu.paykka.com',      // 欧洲；香港可填 https://openapi.paykka.com
+        'api_base_url'      => 'https://openapi.paykka.com',         // 香港（默认）；欧洲可填 https://openapi.eu.paykka.com
         'checkout_base_url' => 'https://checkout.eu.paykka.com',
     ),
 

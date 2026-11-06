@@ -452,7 +452,7 @@ class Paykka_Card_Checkout_Service
         $settings = getPaykkaSettings();
         $env      = function_exists('paykka_is_sandbox') && paykka_is_sandbox()
             ? 'sandbox'
-            : (get_option('paykka_api_region', 'eu') === 'hk' ? 'hk' : 'eu');
+            : (get_option('paykka_api_region', 'hk') === 'eu' ? 'eu' : 'hk');
         $amount = isset($cache['amount']) ? (int) $cache['amount'] : 0;
         if ($amount <= 0 && WC()->cart) {
             $amount = $this->cart_amount_minor();

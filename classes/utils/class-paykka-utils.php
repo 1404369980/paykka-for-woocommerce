@@ -120,7 +120,7 @@ if (!defined('PAYKKA_API_BASE_AP_PROD')) {
     define('PAYKKA_API_BASE_AP_PROD', PAYKKA_API_BASE_HK_PROD);
 }
 if (!defined('PAYKKA_API_BASE_PROD')) {
-    define('PAYKKA_API_BASE_PROD', 'https://openapi.eu.paykka.com');
+    define('PAYKKA_API_BASE_PROD', 'https://openapi.paykka.com');
 }
 if (!defined('PAYKKA_CHECKOUT_BASE_SANDBOX')) {
     // 与 PayKKa 文档 CDN 一致：https://docs.paykka.com/zh-hans/payments/docs/transaction/web/component-web
@@ -137,11 +137,11 @@ if (!defined('PAYKKA_CHECKOUT_BASE_PROD')) {
  */
 function paykka_get_api_region()
 {
-    $region = get_option('paykka_api_region', 'eu');
+    $region = get_option('paykka_api_region', 'hk');
     if ($region === 'ap') {
         return 'hk';
     }
-    return $region === 'hk' ? 'hk' : 'eu';
+    return $region === 'eu' ? 'eu' : 'hk';
 }
 
 /**
